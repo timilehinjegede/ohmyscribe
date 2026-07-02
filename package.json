@@ -1,0 +1,9 @@
+{
+  "name": "ohmyscribe",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*",
+    "ingestion"
+  ]
+}
