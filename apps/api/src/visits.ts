@@ -1,5 +1,12 @@
-import { and, desc, eq, isNull } from "drizzle-orm";
-import { diagnoses, patients, visits, type Db } from "@ohmyscribe/db";
+import { and, count, desc, eq, isNull } from "drizzle-orm";
+import {
+  assessmentAnswers,
+  assessments,
+  diagnoses,
+  patients,
+  visits,
+  type Db,
+} from "@ohmyscribe/db";
 
 // Explicit projections so internal sync columns and externalId don't leak into
 // the API response.
@@ -37,7 +44,7 @@ export async function getVisit(db: Db, id: string) {
   if (!visit) return null;
 
   // Independent lookups — safe to run in parallel.
-  const [patientRows, problemList] = await Promise.all([
+  const [patientRows, problemList, assessmentRows] = await Promise.all([
     db
       .select(patientFields)
       .from(patients)
@@ -46,9 +53,34 @@ export async function getVisit(db: Db, id: string) {
       .select(diagnosisFields)
       .from(diagnoses)
       .where(and(eq(diagnoses.visitId, id), isNull(diagnoses.deletedAt))),
+    db
+      .select({
+        id: assessments.id,
+        completedAt: assessments.completedAt,
+        answeredCount: count(assessmentAnswers.id),
+      })
+      .from(assessments)
+      .leftJoin(
+        assessmentAnswers,
+        and(
+          eq(assessmentAnswers.assessmentId, assessments.id),
+          isNull(assessmentAnswers.deletedAt),
+        ),
+      )
+      .where(and(eq(assessments.visitId, id), isNull(assessments.deletedAt)))
+      .groupBy(assessments.id),
   ]);
 
-  return { ...visit, patient: patientRows[0] ?? null, diagnoses: problemList };
+  const summary = assessmentRows[0];
+  const assessment = summary
+    ? {
+        id: summary.id,
+        answeredCount: Number(summary.answeredCount),
+        completedAt: summary.completedAt,
+      }
+    : null;
+
+  return { ...visit, patient: patientRows[0] ?? null, diagnoses: problemList, assessment };
 }
 
 export async function listVisits(db: Db) {
