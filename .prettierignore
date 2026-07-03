@@ -1,0 +1,6 @@
+node_modules
+bun.lock
+packages/db/drizzle
+fixtures
+dist
+.expo
