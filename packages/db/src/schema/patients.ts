@@ -5,6 +5,8 @@ export const patients = pgTable(
   "patients",
   {
     ...syncColumns,
+    // source-system patient id; upsert key so a re-referral reuses the patient
+    externalId: text("external_id").unique(),
     name: text("name").notNull(),
     dob: date("dob"),
     address: text("address"),
