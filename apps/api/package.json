@@ -1,5 +1,17 @@
 {
   "name": "@ohmyscribe/api",
   "version": "0.0.0",
-  "private": true
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun run --hot src/index.ts",
+    "start": "bun run src/index.ts"
+  },
+  "dependencies": {
+    "@hono/zod-validator": "^0.8.0",
+    "@ohmyscribe/db": "workspace:*",
+    "drizzle-orm": "^0.36.4",
+    "hono": "^4.12.27",
+    "zod": "^3.23.8"
+  }
 }
