@@ -1,4 +1,4 @@
-import { useLocalSearchParams } from "expo-router";
+import { Link, useLocalSearchParams } from "expo-router";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet } from "react-native";
 
 import { ThemedText } from "@/components/themed-text";
@@ -29,6 +29,13 @@ export default function VisitDetailScreen() {
     );
   }
 
+  const assessment = visit.assessment;
+  const assessmentLabel = assessment?.completedAt
+    ? "Review assessment"
+    : (assessment?.answeredCount ?? 0) > 0
+      ? "Continue assessment"
+      : "Start assessment";
+
   return (
     <ThemedView style={styles.container}>
       <ScrollView contentContainerStyle={styles.content}>
@@ -37,6 +44,14 @@ export default function VisitDetailScreen() {
           {visit.type} · {visit.status}
           {visit.patient?.dob ? ` · DOB ${visit.patient.dob}` : ""}
         </ThemedText>
+
+        <Link href={`/visits/${id}/assessment`} asChild>
+          <Pressable>
+            <ThemedView type="backgroundElement" style={styles.documentButton}>
+              <ThemedText type="smallBold">{assessmentLabel}</ThemedText>
+            </ThemedView>
+          </Pressable>
+        </Link>
 
         <ThemedText type="smallBold" themeColor="textSecondary" style={styles.section}>
           DIAGNOSES
@@ -71,6 +86,12 @@ const styles = StyleSheet.create({
   content: {
     padding: Spacing.three,
     gap: Spacing.two,
+  },
+  documentButton: {
+    padding: Spacing.three,
+    borderRadius: Spacing.two,
+    alignItems: "center",
+    marginTop: Spacing.two,
   },
   section: {
     marginTop: Spacing.three,

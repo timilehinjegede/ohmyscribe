@@ -3,7 +3,7 @@ import { useColorScheme } from "react-native";
 
 import { Colors } from "@/constants/theme";
 
-export default function AppTabs() {
+export default function TabsLayout() {
   const colors = Colors[useColorScheme() === "dark" ? "dark" : "light"];
 
   return (
