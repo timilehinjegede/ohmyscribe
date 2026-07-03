@@ -1,5 +1,14 @@
 {
   "name": "@ohmyscribe/ingestion",
   "version": "0.0.0",
-  "private": true
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "ingest": "bun run scripts/ingest.ts"
+  },
+  "dependencies": {
+    "@ohmyscribe/db": "workspace:*",
+    "@ohmyscribe/shared": "workspace:*",
+    "drizzle-orm": "^0.36.4"
+  }
 }
