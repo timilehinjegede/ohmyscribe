@@ -4,3 +4,4 @@ packages/db/drizzle
 fixtures
 dist
 .expo
+docs
