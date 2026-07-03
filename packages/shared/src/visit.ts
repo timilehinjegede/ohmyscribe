@@ -18,8 +18,15 @@ export const visitListItemSchema = visitSummarySchema.extend({
 });
 export type VisitListItem = z.infer<typeof visitListItemSchema>;
 
+export const assessmentSummarySchema = z.object({
+  id: z.string(),
+  answeredCount: z.number(),
+  completedAt: z.string().nullable(),
+});
+
 export const visitDetailSchema = visitSummarySchema.extend({
   patient: patientSummarySchema.nullable(),
   diagnoses: z.array(diagnosisSummarySchema),
+  assessment: assessmentSummarySchema.nullable(),
 });
 export type VisitDetail = z.infer<typeof visitDetailSchema>;
