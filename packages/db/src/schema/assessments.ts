@@ -1,4 +1,4 @@
-import { index, pgTable, uuid } from "drizzle-orm/pg-core";
+import { index, pgTable, timestamp, unique, uuid } from "drizzle-orm/pg-core";
 import { clientUpdatedAt, syncColumns } from "./columns.ts";
 import { visits } from "./visits.ts";
 
@@ -10,10 +10,11 @@ export const assessments = pgTable(
     visitId: uuid("visit_id")
       .notNull()
       .references(() => visits.id),
+    completedAt: timestamp("completed_at", { withTimezone: true, mode: "date" }),
   },
   (t) => [
     index("assessments_server_seq_idx").on(t.serverSeq),
-    index("assessments_visit_id_idx").on(t.visitId),
+    unique("assessments_visit_id_unique").on(t.visitId),
   ],
 );
 

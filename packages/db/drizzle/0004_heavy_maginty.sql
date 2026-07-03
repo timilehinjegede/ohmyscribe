@@ -1,0 +1,1 @@
+ALTER TABLE "assessment_answers" ADD CONSTRAINT "assessment_answers_assessment_item_unique" UNIQUE("assessment_id","item_code");

@@ -29,6 +29,27 @@
       "when": 1783030776683,
       "tag": "0003_diagnoses_server_seq_trigger",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1783109794742,
+      "tag": "0004_heavy_maginty",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1783110711079,
+      "tag": "0005_dusty_scalphunter",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1783112977861,
+      "tag": "0006_rainy_wong",
+      "breakpoints": true
     }
   ]
 }
