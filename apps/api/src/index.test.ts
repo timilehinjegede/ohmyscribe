@@ -1,6 +1,8 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 import { diagnoses, patients, visits } from "@ohmyscribe/db";
+import { visitDetailSchema, visitListItemSchema } from "@ohmyscribe/shared";
+import { z } from "zod";
 import { db } from "./db.ts";
 import server from "./index.ts";
 
@@ -56,13 +58,24 @@ test("GET /visits/:id unknown -> 404", async () => {
   expect(res.status).toBe(404);
 });
 
-test("GET /visits/:id -> 200 with patient + diagnoses, internal columns projected out", async () => {
+test("GET /visits -> 200, conforms to visitListItemSchema[], with joined patient name", async () => {
+  const res = await get("/visits");
+  expect(res.status).toBe(200);
+  const list = z.array(visitListItemSchema).parse(await res.json());
+  const seeded = list.find((visit) => visit.id === visitId);
+  expect(seeded?.patientName).toBe("Test Patient");
+});
+
+test("GET /visits/:id -> 200, conforms to visitDetailSchema, internal columns projected out", async () => {
   const res = await get(`/visits/${visitId}`);
   expect(res.status).toBe(200);
-  const body: any = await res.json();
-  expect(body.patient.name).toBe("Test Patient");
+  const raw: any = await res.json();
+  // projection: internal/sensitive columns are not sent
+  expect(raw).not.toHaveProperty("serverSeq");
+  expect(raw.patient).not.toHaveProperty("externalId");
+  // contract: the response validates against the shared schema
+  const body = visitDetailSchema.parse(raw);
+  expect(body.patient?.name).toBe("Test Patient");
   expect(body.diagnoses).toHaveLength(1);
-  expect(body.diagnoses[0].display).toBe("Anemia (disorder)");
-  expect(body).not.toHaveProperty("serverSeq");
-  expect(body.patient).not.toHaveProperty("externalId");
+  expect(body.diagnoses[0]?.display).toBe("Anemia (disorder)");
 });

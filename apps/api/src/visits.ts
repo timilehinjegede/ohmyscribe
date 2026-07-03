@@ -1,4 +1,4 @@
-import { and, eq, isNull } from "drizzle-orm";
+import { and, desc, eq, isNull } from "drizzle-orm";
 import { diagnoses, patients, visits, type Db } from "@ohmyscribe/db";
 
 // Explicit projections so internal sync columns and externalId don't leak into
@@ -52,5 +52,12 @@ export async function getVisit(db: Db, id: string) {
 }
 
 export async function listVisits(db: Db) {
-  return db.select(visitFields).from(visits).where(isNull(visits.deletedAt));
+  // The deletedAt check is in the ON clause, not WHERE: a soft-deleted patient leaves
+  // a null name instead of dropping the visit, this keeps the list consistent with getVisit.
+  return db
+    .select({ ...visitFields, patientName: patients.name })
+    .from(visits)
+    .leftJoin(patients, and(eq(visits.patientId, patients.id), isNull(patients.deletedAt)))
+    .where(isNull(visits.deletedAt))
+    .orderBy(desc(visits.createdAt));
 }
