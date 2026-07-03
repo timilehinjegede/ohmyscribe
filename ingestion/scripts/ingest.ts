@@ -21,9 +21,7 @@ try {
   db = createDb();
   console.log(JSON.stringify(await ingestReferral(bundle, db), null, 2));
 } catch (err) {
-  console.error(
-    `ingest failed: ${err instanceof Error ? err.message : String(err)}`
-  );
+  console.error(`ingest failed: ${err instanceof Error ? err.message : String(err)}`);
   process.exitCode = 1;
 } finally {
   await db?.$client.end();

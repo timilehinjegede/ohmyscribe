@@ -1,11 +1,4 @@
-import {
-  index,
-  jsonb,
-  pgTable,
-  text,
-  timestamp,
-  uuid,
-} from "drizzle-orm/pg-core";
+import { index, jsonb, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { referralStatus } from "./enums.ts";
 import { patients } from "./patients.ts";
 
@@ -20,11 +13,9 @@ export const rawReferrals = pgTable(
     status: referralStatus("status").notNull(),
     errorReason: text("error_reason"),
     patientId: uuid("patient_id").references(() => patients.id),
-    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
-      .defaultNow()
-      .notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
   },
-  (t) => [index("raw_referrals_status_idx").on(t.status)]
+  (t) => [index("raw_referrals_status_idx").on(t.status)],
 );
 
 export type RawReferral = typeof rawReferrals.$inferSelect;

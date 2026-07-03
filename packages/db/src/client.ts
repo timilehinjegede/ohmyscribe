@@ -12,9 +12,7 @@ import * as schema from "./schema/index.ts";
  * one-off script must close the pool when done or the process hangs on exit:
  * `await db.$client.end()`.
  */
-export function createDb(
-  connectionString: string | undefined = process.env.DATABASE_URL,
-) {
+export function createDb(connectionString: string | undefined = process.env.DATABASE_URL) {
   if (!connectionString) {
     throw new Error("DATABASE_URL is not set");
   }

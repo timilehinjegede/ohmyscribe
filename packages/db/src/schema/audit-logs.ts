@@ -19,9 +19,7 @@ export const auditLogs = pgTable(
     itemCode: text("item_code"),
     event: auditEvent("event").notNull(),
     actorId: uuid("actor_id").references(() => users.id),
-    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
-      .defaultNow()
-      .notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
   },
   (t) => [
     index("audit_logs_server_seq_idx").on(t.serverSeq),

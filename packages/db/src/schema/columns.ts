@@ -10,16 +10,12 @@ export const syncSeq = pgSequence("sync_seq");
 // tables; client-authored tables override it with clientUpdatedAt below.
 export const syncColumns = {
   id: uuid("id").primaryKey().defaultRandom(),
-  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" })
-    .defaultNow()
-    .notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
   serverSeq: bigint("server_seq", { mode: "number" }) // number safe to 2^53
     .default(sql`nextval('sync_seq')`)
     .notNull(),
   deletedAt: timestamp("deleted_at", { withTimezone: true, mode: "date" }),
-  createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
-    .defaultNow()
-    .notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
 };
 
 // No default, so the push handler must supply the device clock (the conflict

@@ -19,7 +19,7 @@ export const diagnoses = pgTable(
     index("diagnoses_server_seq_idx").on(t.serverSeq),
     index("diagnoses_visit_id_idx").on(t.visitId),
     unique("diagnoses_visit_code_unique").on(t.visitId, t.system, t.code),
-  ]
+  ],
 );
 
 export type Diagnosis = typeof diagnoses.$inferSelect;
