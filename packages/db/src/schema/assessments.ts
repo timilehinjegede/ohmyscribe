@@ -1,4 +1,4 @@
-import { index, pgTable, timestamp, unique, uuid } from "drizzle-orm/pg-core";
+import { index, jsonb, pgTable, timestamp, unique, uuid } from "drizzle-orm/pg-core";
 import { clientUpdatedAt, syncColumns } from "./columns.ts";
 import { visits } from "./visits.ts";
 
@@ -11,6 +11,7 @@ export const assessments = pgTable(
       .notNull()
       .references(() => visits.id),
     completedAt: timestamp("completed_at", { withTimezone: true, mode: "date" }),
+    pdgmSnapshot: jsonb("pdgm_snapshot"),
   },
   (t) => [
     index("assessments_server_seq_idx").on(t.serverSeq),

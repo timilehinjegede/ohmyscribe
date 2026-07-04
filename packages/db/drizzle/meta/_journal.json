@@ -85,6 +85,13 @@
       "when": 1783158974584,
       "tag": "0011_free_rawhide_kid",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1783182989580,
+      "tag": "0012_sparkling_dexter_bennett",
+      "breakpoints": true
     }
   ]
 }
