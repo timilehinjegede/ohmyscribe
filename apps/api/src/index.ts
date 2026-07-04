@@ -1,13 +1,14 @@
 import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
 import { z } from "zod";
-import { upsertAnswersSchema } from "@ohmyscribe/shared";
+import { upsertAnswersSchema, upsertCodingSchema } from "@ohmyscribe/shared";
 import {
   completeAssessment,
   getAssessment,
   getOrCreateAssessment,
   upsertAnswers,
 } from "./assessments.ts";
+import { getCodedDiagnoses, upsertCoding } from "./diagnosis-codings.ts";
 import { db } from "./db.ts";
 import { getVisit, listVisits } from "./visits.ts";
 
@@ -80,6 +81,39 @@ app.post(
     if (!assessment) return c.json({ error: "assessment not found" }, 404);
     await completeAssessment(db, id);
     return c.json(await getAssessment(db, id));
+  },
+);
+
+app.get(
+  "/assessments/:id/diagnoses",
+  zValidator("param", z.object({ id: z.string().uuid() }), (result, c) => {
+    if (!result.success) return c.json({ error: "invalid assessment id" }, 400);
+  }),
+  async (c) => {
+    const { id } = c.req.valid("param");
+    const coded = await getCodedDiagnoses(db, id);
+    if (!coded) return c.json({ error: "assessment not found" }, 404);
+    return c.json(coded);
+  },
+);
+
+app.patch(
+  "/assessments/:id/codings",
+  zValidator("param", z.object({ id: z.string().uuid() }), (result, c) => {
+    if (!result.success) return c.json({ error: "invalid assessment id" }, 400);
+  }),
+  zValidator("json", upsertCodingSchema, (result, c) => {
+    if (!result.success) return c.json({ error: "invalid coding" }, 400);
+  }),
+  async (c) => {
+    const { id } = c.req.valid("param");
+    const coding = c.req.valid("json");
+    const assessment = await getAssessment(db, id);
+    if (!assessment) return c.json({ error: "assessment not found" }, 404);
+    if (assessment.completedAt) return c.json({ error: "assessment is complete" }, 409);
+    const ok = await upsertCoding(db, id, coding);
+    if (!ok) return c.json({ error: "diagnosis not in this assessment" }, 422);
+    return c.json(await getCodedDiagnoses(db, id));
   },
 );
 

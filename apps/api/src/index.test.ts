@@ -1,7 +1,19 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
-import { assessmentAnswers, assessments, diagnoses, patients, visits } from "@ohmyscribe/db";
-import { assessmentDetailSchema, visitDetailSchema, visitListItemSchema } from "@ohmyscribe/shared";
+import {
+  assessmentAnswers,
+  assessments,
+  diagnoses,
+  diagnosisCodings,
+  patients,
+  visits,
+} from "@ohmyscribe/db";
+import {
+  assessmentDetailSchema,
+  codedDiagnosisSchema,
+  visitDetailSchema,
+  visitListItemSchema,
+} from "@ohmyscribe/shared";
 import { z } from "zod";
 import { db } from "./db.ts";
 import server from "./index.ts";
@@ -11,6 +23,8 @@ import server from "./index.ts";
 let patientId: string;
 let visitId: string;
 let assessmentId: string;
+let hypertensionId: string;
+let asthmaId: string;
 let completedAt: string | null = null;
 
 beforeAll(async () => {
@@ -32,6 +46,32 @@ beforeAll(async () => {
     code: "111",
     display: "Anemia (disorder)",
   });
+
+  // Crosswalk-coded diagnoses with onset for the coding tests; "111" above is
+  // intentionally off-crosswalk (no suggestion) and onset-less (so it ranks last).
+  const [hypertension] = await db
+    .insert(diagnoses)
+    .values({
+      visitId,
+      system: "http://snomed.info/sct",
+      code: "59621000",
+      display: "Essential hypertension (disorder)",
+      onset: new Date("2022-06-01"),
+    })
+    .returning({ id: diagnoses.id });
+  hypertensionId = hypertension!.id;
+
+  const [asthma] = await db
+    .insert(diagnoses)
+    .values({
+      visitId,
+      system: "http://snomed.info/sct",
+      code: "195967001",
+      display: "Asthma (disorder)",
+      onset: new Date("2020-06-01"),
+    })
+    .returning({ id: diagnoses.id });
+  asthmaId = asthma!.id;
 });
 
 afterAll(async () => {
@@ -42,6 +82,7 @@ afterAll(async () => {
     .where(eq(assessments.visitId, visitId));
   for (const row of rows) {
     await db.delete(assessmentAnswers).where(eq(assessmentAnswers.assessmentId, row.id));
+    await db.delete(diagnosisCodings).where(eq(diagnosisCodings.assessmentId, row.id));
   }
   await db.delete(assessments).where(eq(assessments.visitId, visitId));
   await db.delete(diagnoses).where(eq(diagnoses.visitId, visitId));
@@ -97,8 +138,8 @@ test("GET /visits/:id -> 200, conforms to visitDetailSchema, internal columns pr
   // contract: the response validates against the shared schema
   const body = visitDetailSchema.parse(raw);
   expect(body.patient?.name).toBe("Test Patient");
-  expect(body.diagnoses).toHaveLength(1);
-  expect(body.diagnoses[0]?.display).toBe("Anemia (disorder)");
+  expect(body.diagnoses).toHaveLength(3);
+  expect(body.diagnoses.some((diagnosis) => diagnosis.display === "Anemia (disorder)")).toBe(true);
 });
 
 test("POST /visits/:id/assessment -> 200, creates and returns the assessment", async () => {
@@ -183,6 +224,102 @@ test("PATCH /assessments/:id/answers dedupes a repeated itemCode (last wins, no 
   expect(body.answers.find((answer) => answer.itemCode === "M1800")?.value).toBe("3");
 });
 
+test("GET /assessments/:id/diagnoses -> 200, crosswalk suggestions, onset-ranked (nulls last)", async () => {
+  const res = await get(`/assessments/${assessmentId}/diagnoses`);
+  expect(res.status).toBe(200);
+  const coded = z.array(codedDiagnosisSchema).parse(await res.json());
+  expect(coded.find((d) => d.diagnosisId === hypertensionId)?.suggestion?.icd10).toBe("I10");
+  // "111" is not in the crosswalk -> no suggestion
+  expect(coded.find((d) => d.code === "111")?.suggestion).toBeNull();
+  // onset desc, nulls last: dated diagnoses lead, the onset-less "111" trails
+  expect(coded[0]?.diagnosisId).toBe(hypertensionId);
+  expect(coded.at(-1)?.code).toBe("111");
+});
+
+test("PATCH /assessments/:id/codings -> 200, codes a diagnosis as primary", async () => {
+  const res = await patch(`/assessments/${assessmentId}/codings`, {
+    diagnosisId: hypertensionId,
+    icd10Code: "I10",
+    isPrimary: true,
+    updatedAt: new Date().toISOString(),
+  });
+  expect(res.status).toBe(200);
+  const coded = z.array(codedDiagnosisSchema).parse(await res.json());
+  expect(coded.find((d) => d.diagnosisId === hypertensionId)?.coding).toEqual({
+    icd10Code: "I10",
+    isPrimary: true,
+  });
+});
+
+test("PATCH /assessments/:id/codings -> 400 on a code outside the allowlist", async () => {
+  const res = await patch(`/assessments/${assessmentId}/codings`, {
+    diagnosisId: hypertensionId,
+    icd10Code: "Z99.9", // well-formed but not a crosswalk code
+    isPrimary: false,
+    updatedAt: new Date().toISOString(),
+  });
+  expect(res.status).toBe(400);
+});
+
+test("PATCH /assessments/:id/codings -> a new primary demotes the previous one", async () => {
+  const res = await patch(`/assessments/${assessmentId}/codings`, {
+    diagnosisId: asthmaId,
+    icd10Code: "J45.909",
+    isPrimary: true,
+    updatedAt: new Date().toISOString(),
+  });
+  const coded = z.array(codedDiagnosisSchema).parse(await res.json());
+  expect(coded.find((d) => d.diagnosisId === asthmaId)?.coding?.isPrimary).toBe(true);
+  expect(coded.find((d) => d.diagnosisId === hypertensionId)?.coding?.isPrimary).toBe(false);
+});
+
+test("PATCH /assessments/:id/codings -> 422 for a diagnosis not in this assessment's visit", async () => {
+  const res = await patch(`/assessments/${assessmentId}/codings`, {
+    diagnosisId: "11111111-1111-1111-1111-111111111111",
+    icd10Code: "I10",
+    isPrimary: false,
+    updatedAt: new Date().toISOString(),
+  });
+  expect(res.status).toBe(422);
+});
+
+test("PATCH /assessments/:id/codings applies last-write-wins (stale update ignored)", async () => {
+  const older = new Date(Date.now() - 60_000).toISOString();
+  const newer = new Date().toISOString();
+  await patch(`/assessments/${assessmentId}/codings`, {
+    diagnosisId: asthmaId,
+    icd10Code: "J45.909",
+    isPrimary: true,
+    updatedAt: newer,
+  });
+  const res = await patch(`/assessments/${assessmentId}/codings`, {
+    diagnosisId: asthmaId,
+    icd10Code: "D64.9",
+    isPrimary: true,
+    updatedAt: older,
+  });
+  const coded = z.array(codedDiagnosisSchema).parse(await res.json());
+  expect(coded.find((d) => d.diagnosisId === asthmaId)?.coding?.icd10Code).toBe("J45.909");
+});
+
+test("PATCH /assessments/:id/codings: a stale primary write can't blank the primary", async () => {
+  // asthma is the current primary and hypertension already has a newer coding, so a stale
+  // isPrimary write to hypertension must be a no-op — not demote asthma then install nothing.
+  const stale = new Date(Date.now() - 3_600_000).toISOString();
+  await patch(`/assessments/${assessmentId}/codings`, {
+    diagnosisId: hypertensionId,
+    icd10Code: "I10",
+    isPrimary: true,
+    updatedAt: stale,
+  });
+  const coded = z.array(codedDiagnosisSchema).parse(
+    await (await get(`/assessments/${assessmentId}/diagnoses`)).json(),
+  );
+  const primaries = coded.filter((d) => d.coding?.isPrimary);
+  expect(primaries).toHaveLength(1);
+  expect(primaries[0]?.diagnosisId).toBe(asthmaId);
+});
+
 test("GET /visits/:id reflects the assessment summary (answered, not yet complete)", async () => {
   const res = await get(`/visits/${visitId}`);
   const body = visitDetailSchema.parse(await res.json());
@@ -218,4 +355,18 @@ test("PATCH /assessments/:id/answers -> 409 once complete, leaving the value unc
   const reread = await post(`/visits/${visitId}/assessment`);
   const after = assessmentDetailSchema.parse(await reread.json());
   expect(after.answers.find((answer) => answer.itemCode === "M1830")?.value).toBe("2");
+});
+
+test("PATCH /assessments/:id/codings -> 409 once complete, leaving codings unchanged", async () => {
+  const res = await patch(`/assessments/${assessmentId}/codings`, {
+    diagnosisId: hypertensionId,
+    icd10Code: "I10",
+    isPrimary: true, // would demote asthma if it were applied
+    updatedAt: new Date().toISOString(),
+  });
+  expect(res.status).toBe(409);
+  const coded = z.array(codedDiagnosisSchema).parse(
+    await (await get(`/assessments/${assessmentId}/diagnoses`)).json(),
+  );
+  expect(coded.find((d) => d.diagnosisId === asthmaId)?.coding?.isPrimary).toBe(true);
 });
