@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { oasisAnswerSchema } from "./oasis/index.ts";
+import { ADMISSION_SOURCES, TIMINGS } from "./pdgm/index.ts";
 
 // Lenient on purpose: a strict catalog check would fail reads once an item leaves the catalog.
 export const assessmentAnswerSchema = z.object({
@@ -29,6 +30,11 @@ export type AssessmentDetail = z.infer<typeof assessmentDetailSchema>;
 
 export const extractRequestSchema = z.object({
   transcript: z.string().min(1).max(20000),
+});
+
+export const completeRequestSchema = z.object({
+  timing: z.enum(TIMINGS),
+  admissionSource: z.enum(ADMISSION_SOURCES),
 });
 
 // updatedAt is the device clock the server uses for last-write-wins when autosaves race.

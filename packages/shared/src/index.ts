@@ -6,3 +6,4 @@ export * from "./patient.ts";
 export * from "./visit.ts";
 export * from "./oasis/index.ts";
 export * from "./assessment.ts";
+export * from "./pdgm/index.ts";

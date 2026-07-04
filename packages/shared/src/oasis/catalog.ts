@@ -102,6 +102,19 @@ export const OASIS_ITEMS = [
       { value: "5", label: "Fully dependent, unable to feed" },
     ],
   },
+  // M1033 is multi-select in OASIS; captured here as a factor count, which is what PDGM scores.
+  {
+    code: "M1033",
+    label: "Risk for Hospitalization",
+    section: "functional",
+    responses: [
+      { value: "0", label: "No risk factors" },
+      { value: "1", label: "1 risk factor" },
+      { value: "2", label: "2 risk factors" },
+      { value: "3", label: "3 risk factors" },
+      { value: "4", label: "4 or more risk factors" },
+    ],
+  },
   {
     code: "M1700",
     label: "Cognitive Functioning",
