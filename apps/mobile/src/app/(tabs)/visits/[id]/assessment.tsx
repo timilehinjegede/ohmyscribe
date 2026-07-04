@@ -1,5 +1,5 @@
 import { useLocalSearchParams } from "expo-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from "react-native";
 import {
   RecordingPresets,
@@ -15,6 +15,7 @@ import {
   type AnswerSuggestion,
 } from "@ohmyscribe/shared";
 
+import { CodingStep } from "@/components/coding-step";
 import { DiagnosisCodingStep } from "@/components/diagnosis-coding-step";
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
@@ -26,14 +27,15 @@ import {
   useSaveAnswer,
 } from "@/data/assessment";
 
-// Diagnoses review, one step per catalog section, then the AI-draft review.
-const STEPS = ["diagnoses", ...oasisSections, "review"] as const;
+// Diagnoses, one step per catalog section, the AI-draft review, then the PDGM coding view.
+const STEPS = ["diagnoses", ...oasisSections, "review", "coding"] as const;
 const STEP_TITLES: Record<(typeof STEPS)[number], string> = {
   diagnoses: "Diagnoses",
   functional: "Functional",
   cognitive: "Cognitive",
   mood: "Mood",
   review: "Review AI draft",
+  coding: "PDGM Coding",
 };
 
 // Response label for an item's value, so the review step shows text, not raw codes.
@@ -80,6 +82,14 @@ export default function AssessmentWizard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [assessment.data?.id, isComplete]);
 
+  // A filed assessment leads with the coding view (the record stays reachable via Back).
+  const landedOnCoding = useRef(false);
+  useEffect(() => {
+    if (landedOnCoding.current || !assessment.data?.completedAt) return;
+    landedOnCoding.current = true;
+    setStepIndex(STEPS.length - 2); // filed steps drop "review", so coding sits at length-2
+  }, [assessment.data?.completedAt]);
+
   if (assessment.isPending && id) {
     return (
       <ThemedView style={styles.centered}>
@@ -99,11 +109,16 @@ export default function AssessmentWizard() {
     );
   }
 
-  const step = STEPS[stepIndex]!;
+  // The AI-draft review is a pre-filing reconciliation; once filed, drop that step.
+  const steps = STEPS.filter((name) => !(isComplete && name === "review"));
+  const index = Math.min(stepIndex, steps.length - 1);
+  const step = steps[index]!;
   const answers = new Map(assessment.data.answers.map((answer) => [answer.itemCode, answer.value]));
-  const reviewIndex = STEPS.length - 1;
+  const reviewIndex = steps.indexOf("review");
+  const codingIndex = steps.indexOf("coding");
   const onReview = step === "review";
-  const onLastScaleStep = stepIndex === reviewIndex - 1; // the mood step
+  const onCoding = step === "coding";
+  const onLastScaleStep = step === oasisSections[oasisSections.length - 1]; // the mood step
 
   const finish = async () => {
     if (recorder.isRecording) {
@@ -129,7 +144,7 @@ export default function AssessmentWizard() {
     <ThemedView style={styles.container}>
       <View style={styles.header}>
         <ThemedText type="small" themeColor="textSecondary">
-          Step {stepIndex + 1} of {STEPS.length}
+          Step {index + 1} of {steps.length}
           {isComplete
             ? " · Completed (read-only)"
             : recorderState.isRecording
@@ -150,6 +165,15 @@ export default function AssessmentWizard() {
             visitId={id}
             assessmentId={assessment.data.id}
             isComplete={isComplete}
+          />
+        ) : onCoding ? (
+          <CodingStep
+            assessmentId={assessment.data.id}
+            isComplete={isComplete}
+            onFinalize={(timing, admissionSource) =>
+              completeAssessment.mutate({ timing, admissionSource })
+            }
+            finalizing={completeAssessment.isPending}
           />
         ) : onReview ? (
           <ReviewStep
@@ -195,25 +219,15 @@ export default function AssessmentWizard() {
       </ScrollView>
 
       <View style={styles.footer}>
-        <Pressable
-          onPress={() => setStepIndex((index) => index - 1)}
-          disabled={stepIndex === 0}
-          hitSlop={8}
-        >
-          <ThemedText type="linkPrimary" style={stepIndex === 0 ? styles.disabled : undefined}>
+        <Pressable onPress={() => setStepIndex(index - 1)} disabled={index === 0} hitSlop={8}>
+          <ThemedText type="linkPrimary" style={index === 0 ? styles.disabled : undefined}>
             Back
           </ThemedText>
         </Pressable>
-        {onReview ? (
-          isComplete ? null : (
-            <Pressable
-              onPress={() => completeAssessment.mutate()}
-              disabled={completeAssessment.isPending}
-              hitSlop={8}
-            >
-              <ThemedText type="linkPrimary">Complete → coding</ThemedText>
-            </Pressable>
-          )
+        {onCoding ? null : onReview ? (
+          <Pressable onPress={() => setStepIndex(codingIndex)} hitSlop={8}>
+            <ThemedText type="linkPrimary">See coding</ThemedText>
+          </Pressable>
         ) : onLastScaleStep && !isComplete ? (
           <Pressable onPress={() => void finish()} disabled={extractAudio.isPending} hitSlop={8}>
             <ThemedText type="linkPrimary">
@@ -221,7 +235,7 @@ export default function AssessmentWizard() {
             </ThemedText>
           </Pressable>
         ) : (
-          <Pressable onPress={() => setStepIndex((index) => index + 1)} hitSlop={8}>
+          <Pressable onPress={() => setStepIndex(index + 1)} hitSlop={8}>
             <ThemedText type="linkPrimary">Next</ThemedText>
           </Pressable>
         )}

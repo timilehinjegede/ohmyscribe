@@ -1,6 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { FileSystemUploadType, uploadAsync } from "expo-file-system/legacy";
-import { assessmentDetailSchema, type AssessmentDetail } from "@ohmyscribe/shared";
+import {
+  assessmentDetailSchema,
+  type AdmissionSource,
+  type AssessmentDetail,
+  type Timing,
+} from "@ohmyscribe/shared";
 
 import { API_URL } from "@/config";
 import { HttpError } from "@/data/http";
@@ -65,8 +70,14 @@ export function useSaveAnswer(visitId: string, assessmentId: string) {
   });
 }
 
-async function completeAssessment(assessmentId: string) {
-  const res = await fetch(`${API_URL}/assessments/${assessmentId}/complete`, { method: "POST" });
+type Completion = { timing: Timing; admissionSource: AdmissionSource };
+
+async function completeAssessment(assessmentId: string, body: Completion) {
+  const res = await fetch(`${API_URL}/assessments/${assessmentId}/complete`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
   if (!res.ok) throw new HttpError(res.status, `complete assessment failed (${res.status})`);
   return assessmentDetailSchema.parse(await res.json());
 }
@@ -74,11 +85,11 @@ async function completeAssessment(assessmentId: string) {
 export function useCompleteAssessment(visitId: string, assessmentId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: () => completeAssessment(assessmentId),
+    mutationFn: (body: Completion) => completeAssessment(assessmentId, body),
     onSuccess: (updated) => {
       queryClient.setQueryData(["assessment", visitId], updated);
-      // Refresh the visit detail so its button flips to "Review".
       queryClient.invalidateQueries({ queryKey: ["visits", visitId] });
+      queryClient.invalidateQueries({ queryKey: ["pdgm", assessmentId] });
     },
   });
 }
