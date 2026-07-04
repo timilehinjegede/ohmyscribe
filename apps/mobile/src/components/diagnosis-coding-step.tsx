@@ -11,7 +11,7 @@ const MAX_SECONDARY = 5; // OASIS M1023 allows up to five other diagnoses.
 // The code to apply when a diagnosis is assigned: its confirmed code if it already has one,
 // otherwise the crosswalk suggestion. Null when neither exists (can't be assigned).
 const codeFor = (diagnosis: CodedDiagnosis) =>
-  diagnosis.coding?.icd10Code ?? diagnosis.suggestion?.icd10 ?? null;
+  diagnosis.coding?.icd10Code ?? diagnosis.suggestedCode?.icd10 ?? null;
 const shortName = (diagnosis: CodedDiagnosis) =>
   (diagnosis.display ?? diagnosis.code).replace(/\s*\(disorder\)\s*$/i, "");
 
@@ -158,7 +158,7 @@ function SuggestionChip({
 }) {
   const theme = useTheme();
   const code = codeFor(diagnosis);
-  const lowConfidence = diagnosis.suggestion?.confidence === "low";
+  const lowConfidence = diagnosis.suggestedCode?.confidence === "low";
   const unavailable = disabled || !code;
   return (
     <Pressable

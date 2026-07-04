@@ -1,5 +1,11 @@
 import { and, eq, isNull, lt, ne, sql } from "drizzle-orm";
-import { assessments, diagnoses, diagnosisCodings, type Db } from "@ohmyscribe/db";
+import {
+  assessments,
+  diagnoses,
+  diagnosisCodings,
+  diagnosisSuggestions,
+  type Db,
+} from "@ohmyscribe/db";
 import { icd10ForSnomed } from "@ohmyscribe/shared";
 
 const SNOMED_SYSTEM = "http://snomed.info/sct";
@@ -19,7 +25,10 @@ export async function getCodedDiagnoses(db: Db, assessmentId: string) {
       display: diagnoses.display,
       onset: diagnoses.onset,
       codedIcd10: diagnosisCodings.icd10Code,
-      isPrimary: diagnosisCodings.isPrimary,
+      codingIsPrimary: diagnosisCodings.isPrimary,
+      suggestionIsPrimary: diagnosisSuggestions.isPrimary,
+      suggestionRationale: diagnosisSuggestions.rationale,
+      suggestionConfidence: diagnosisSuggestions.confidence,
     })
     .from(diagnoses)
     .leftJoin(
@@ -28,6 +37,14 @@ export async function getCodedDiagnoses(db: Db, assessmentId: string) {
         eq(diagnosisCodings.diagnosisId, diagnoses.id),
         eq(diagnosisCodings.assessmentId, assessmentId),
         isNull(diagnosisCodings.deletedAt),
+      ),
+    )
+    .leftJoin(
+      diagnosisSuggestions,
+      and(
+        eq(diagnosisSuggestions.diagnosisId, diagnoses.id),
+        eq(diagnosisSuggestions.assessmentId, assessmentId),
+        isNull(diagnosisSuggestions.deletedAt),
       ),
     )
     .where(and(eq(diagnoses.visitId, assessment.visitId), isNull(diagnoses.deletedAt)))
@@ -40,9 +57,17 @@ export async function getCodedDiagnoses(db: Db, assessmentId: string) {
     code: row.code,
     display: row.display,
     onset: row.onset?.toISOString() ?? null,
-    suggestion: row.system === SNOMED_SYSTEM ? icd10ForSnomed(row.code) : null,
+    suggestedCode: row.system === SNOMED_SYSTEM ? icd10ForSnomed(row.code) : null,
+    suggestion:
+      row.suggestionIsPrimary === null
+        ? null
+        : {
+            isPrimary: row.suggestionIsPrimary,
+            rationale: row.suggestionRationale,
+            confidence: row.suggestionConfidence,
+          },
     coding: row.codedIcd10
-      ? { icd10Code: row.codedIcd10, isPrimary: row.isPrimary ?? false }
+      ? { icd10Code: row.codedIcd10, isPrimary: row.codingIsPrimary ?? false }
       : null,
   }));
 }

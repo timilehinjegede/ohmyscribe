@@ -236,9 +236,11 @@ test("GET /assessments/:id/diagnoses -> 200, crosswalk suggestions, onset-ranked
   const res = await get(`/assessments/${assessmentId}/diagnoses`);
   expect(res.status).toBe(200);
   const coded = z.array(codedDiagnosisSchema).parse(await res.json());
-  expect(coded.find((d) => d.diagnosisId === hypertensionId)?.suggestion?.icd10).toBe("I10");
-  // "111" is not in the crosswalk -> no suggestion
-  expect(coded.find((d) => d.code === "111")?.suggestion).toBeNull();
+  expect(coded.find((d) => d.diagnosisId === hypertensionId)?.suggestedCode?.icd10).toBe("I10");
+  // "111" is not in the crosswalk -> no suggested code
+  expect(coded.find((d) => d.code === "111")?.suggestedCode).toBeNull();
+  // the AI role suggestion is null until that pipeline runs
+  expect(coded[0]?.suggestion).toBeNull();
   // onset desc, nulls last: dated diagnoses lead, the onset-less "111" trails
   expect(coded[0]?.diagnosisId).toBe(hypertensionId);
   expect(coded.at(-1)?.code).toBe("111");

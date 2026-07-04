@@ -9,18 +9,26 @@ export const icd10CodeSchema = z
   .refine(isValidIcd10Format, "malformed ICD-10-CM code")
   .refine(isKnownIcd10, "unknown ICD-10-CM code");
 
-// suggestion is the crosswalk's proposal; coding is what the nurse confirmed (null until then).
+// suggestedCode is the crosswalk's deterministic mapping; suggestion is the AI's recommended
+// role (null until the suggestion pipeline runs); coding is what the nurse confirmed.
 export const codedDiagnosisSchema = z.object({
   diagnosisId: z.string(),
   system: z.string(),
   code: z.string(),
   display: z.string().nullable(),
   onset: z.string().nullable(),
-  suggestion: z
+  suggestedCode: z
     .object({
       icd10: z.string(),
       display: z.string(),
       confidence: z.enum(["high", "medium", "low"]),
+    })
+    .nullable(),
+  suggestion: z
+    .object({
+      isPrimary: z.boolean(),
+      rationale: z.string().nullable(),
+      confidence: z.number().nullable(),
     })
     .nullable(),
   coding: z.object({ icd10Code: z.string(), isPrimary: z.boolean() }).nullable(),
