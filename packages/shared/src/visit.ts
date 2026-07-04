@@ -21,6 +21,7 @@ export type VisitListItem = z.infer<typeof visitListItemSchema>;
 export const assessmentSummarySchema = z.object({
   id: z.string(),
   answeredCount: z.number(),
+  codedCount: z.number(),
   completedAt: z.string().nullable(),
 });
 
