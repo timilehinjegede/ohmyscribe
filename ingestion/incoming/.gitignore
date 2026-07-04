@@ -1,0 +1,4 @@
+# Dropped referrals and their processed results are runtime data, not source.
+*
+!.gitignore
+!.gitkeep

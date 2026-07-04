@@ -4,11 +4,13 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "ingest": "bun run scripts/ingest.ts"
+    "ingest": "bun run scripts/ingest.ts",
+    "watch": "bun run --env-file=../.env src/watcher.ts"
   },
   "dependencies": {
     "@ohmyscribe/db": "workspace:*",
     "@ohmyscribe/shared": "workspace:*",
+    "chokidar": "^5.0.0",
     "drizzle-orm": "^0.36.4"
   }
 }
