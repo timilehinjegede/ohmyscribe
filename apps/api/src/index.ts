@@ -1,16 +1,17 @@
 import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
 import { z } from "zod";
-import { upsertAnswersSchema, upsertCodingSchema } from "@ohmyscribe/shared";
+import { extractRequestSchema, upsertAnswersSchema, upsertCodingSchema } from "@ohmyscribe/shared";
 import {
   completeAssessment,
   getAssessment,
   getOrCreateAssessment,
   upsertAnswers,
 } from "./assessments.ts";
+import { extractAnswers } from "./answer-suggestions.ts";
 import { getCodedDiagnoses, removeCoding, upsertCoding } from "./diagnosis-codings.ts";
 import { suggestCoding } from "./diagnosis-suggestions.ts";
-import { callCodingModel } from "./openai.ts";
+import { callCodingModel, callExtractModel, transcribeAudio } from "./openai.ts";
 import { db } from "./db.ts";
 import { getVisit, listVisits } from "./visits.ts";
 
@@ -69,6 +70,54 @@ app.patch(
     if (assessment.completedAt) return c.json({ error: "assessment is complete" }, 409);
     await upsertAnswers(db, id, answers);
     return c.json(await getAssessment(db, id));
+  },
+);
+
+app.post(
+  "/assessments/:id/extract",
+  zValidator("param", z.object({ id: z.string().uuid() }), (result, c) => {
+    if (!result.success) return c.json({ error: "invalid assessment id" }, 400);
+  }),
+  zValidator("json", extractRequestSchema, (result, c) => {
+    if (!result.success) return c.json({ error: "invalid transcript" }, 400);
+  }),
+  async (c) => {
+    const { id } = c.req.valid("param");
+    const { transcript } = c.req.valid("json");
+    const assessment = await getAssessment(db, id);
+    if (!assessment) return c.json({ error: "assessment not found" }, 404);
+    if (assessment.completedAt) return c.json({ error: "assessment is complete" }, 409);
+    try {
+      const drafted = await extractAnswers(db, id, transcript, callExtractModel);
+      return c.json({ drafted });
+    } catch (error) {
+      // User-initiated, so surface the failure rather than swallow it (unlike suggest-coding).
+      console.error("extract failed:", error);
+      return c.json({ error: "extraction failed" }, 502);
+    }
+  },
+);
+
+app.post(
+  "/assessments/:id/extract-audio",
+  zValidator("param", z.object({ id: z.string().uuid() }), (result, c) => {
+    if (!result.success) return c.json({ error: "invalid assessment id" }, 400);
+  }),
+  async (c) => {
+    const { id } = c.req.valid("param");
+    const audio = (await c.req.parseBody())["audio"];
+    if (!(audio instanceof File)) return c.json({ error: "missing audio" }, 400);
+    const assessment = await getAssessment(db, id);
+    if (!assessment) return c.json({ error: "assessment not found" }, 404);
+    if (assessment.completedAt) return c.json({ error: "assessment is complete" }, 409);
+    try {
+      const transcript = await transcribeAudio(audio);
+      const drafted = await extractAnswers(db, id, transcript, callExtractModel);
+      return c.json({ drafted });
+    } catch (error) {
+      console.error("audio extract failed:", error);
+      return c.json({ error: "extraction failed" }, 502);
+    }
   },
 );
 

@@ -1,5 +1,5 @@
-import { and, eq, isNull, sql } from "drizzle-orm";
-import { assessmentAnswers, assessments, type Db } from "@ohmyscribe/db";
+import { and, eq, isNotNull, isNull, sql } from "drizzle-orm";
+import { answerSuggestions, assessmentAnswers, assessments, type Db } from "@ohmyscribe/db";
 
 // Idempotent create-or-return: a retried or concurrent POST conflicts on the visitId
 // unique and re-reads the existing row instead of inserting a second assessment.
@@ -33,7 +33,25 @@ export async function getAssessment(db: Db, assessmentId: string) {
     .where(
       and(eq(assessmentAnswers.assessmentId, assessmentId), isNull(assessmentAnswers.deletedAt)),
     );
-  return { ...assessment, answers };
+
+  const suggestionRows = await db
+    .select({
+      itemCode: answerSuggestions.itemCode,
+      value: answerSuggestions.suggestedValue,
+      transcriptSnippet: answerSuggestions.transcriptSnippet,
+      confidence: answerSuggestions.confidence,
+    })
+    .from(answerSuggestions)
+    .where(
+      and(
+        eq(answerSuggestions.assessmentId, assessmentId),
+        isNull(answerSuggestions.deletedAt),
+        isNotNull(answerSuggestions.suggestedValue),
+      ),
+    );
+  // suggestedValue is nullable in the table but /extract always sets it; the filter guarantees it.
+  const suggestions = suggestionRows.map((row) => ({ ...row, value: row.value! }));
+  return { ...assessment, answers, suggestions };
 }
 
 export async function upsertAnswers(

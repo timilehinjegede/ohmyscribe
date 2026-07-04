@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 import {
+  answerSuggestions,
   assessmentAnswers,
   assessments,
   diagnoses,
@@ -17,6 +18,8 @@ import {
 } from "@ohmyscribe/shared";
 import { z } from "zod";
 import { db } from "./db.ts";
+import { extractAnswers } from "./answer-suggestions.ts";
+import { getAssessment } from "./assessments.ts";
 import { selectPicks, suggestCoding } from "./diagnosis-suggestions.ts";
 import server from "./index.ts";
 
@@ -86,6 +89,7 @@ afterAll(async () => {
     await db.delete(assessmentAnswers).where(eq(assessmentAnswers.assessmentId, row.id));
     await db.delete(diagnosisCodings).where(eq(diagnosisCodings.assessmentId, row.id));
     await db.delete(diagnosisSuggestions).where(eq(diagnosisSuggestions.assessmentId, row.id));
+    await db.delete(answerSuggestions).where(eq(answerSuggestions.assessmentId, row.id));
   }
   await db.delete(assessments).where(eq(assessments.visitId, visitId));
   await db.delete(diagnoses).where(eq(diagnoses.visitId, visitId));
@@ -109,6 +113,14 @@ const del = (path: string, body: unknown) =>
   server.fetch(
     new Request(`http://localhost${path}`, {
       method: "DELETE",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    }),
+  );
+const postJson = (path: string, body: unknown) =>
+  server.fetch(
+    new Request(`http://localhost${path}`, {
+      method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(body),
     }),
@@ -472,6 +484,71 @@ test("selectPicks drops an invented secondary id", () => {
     new Set(["real"]),
   );
   expect(picks.map((pick) => pick.diagnosisId)).toEqual(["real"]);
+});
+
+test("extractAnswers writes validated drafts and drops hallucinated item/value", async () => {
+  const drafted = await extractAnswers(db, assessmentId, "visit note", async () => [
+    { itemCode: "M1800", value: "0", transcriptSnippet: "grooms self", confidence: 0.9 },
+    { itemCode: "ZZZZ", value: "0", transcriptSnippet: "n/a", confidence: 0.5 }, // not in catalog
+    { itemCode: "M1830", value: "99", transcriptSnippet: "n/a", confidence: 0.5 }, // off-scale value
+  ]);
+  expect(drafted).toBe(1);
+  const detail = await getAssessment(db, assessmentId);
+  expect(detail?.suggestions.map((suggestion) => suggestion.itemCode)).toEqual(["M1800"]);
+  expect(detail?.suggestions[0]?.value).toBe("0");
+  expect(detail?.suggestions[0]?.transcriptSnippet).toBe("grooms self");
+});
+
+test("extractAnswers replaces the prior drafts on a re-run", async () => {
+  await extractAnswers(db, assessmentId, "different note", async () => [
+    { itemCode: "M1810", value: "1", transcriptSnippet: "dresses with help", confidence: 0.8 },
+  ]);
+  const detail = await getAssessment(db, assessmentId);
+  expect(detail?.suggestions.map((suggestion) => suggestion.itemCode)).toEqual(["M1810"]);
+});
+
+test("extractAnswers dedupes an item, keeping the highest-confidence valid draft", async () => {
+  const drafted = await extractAnswers(db, assessmentId, "note", async () => [
+    { itemCode: "M1800", value: "99", transcriptSnippet: "off-scale, dropped", confidence: 0.9 },
+    { itemCode: "M1800", value: "0", transcriptSnippet: "valid but lower conf", confidence: 0.4 },
+    { itemCode: "M1800", value: "2", transcriptSnippet: "someone must assist", confidence: 0.8 },
+  ]);
+  expect(drafted).toBe(1);
+  const detail = await getAssessment(db, assessmentId);
+  expect(detail?.suggestions).toHaveLength(1);
+  // "0" appears first among valid drafts; "2" wins on confidence.
+  expect(detail?.suggestions[0]?.value).toBe("2");
+});
+
+test("POST /assessments/:id/extract -> 400 on an empty transcript", async () => {
+  const res = await postJson(`/assessments/${assessmentId}/extract`, { transcript: "" });
+  expect(res.status).toBe(400);
+});
+
+test("POST /assessments/:id/extract -> 404 for an unknown assessment", async () => {
+  const res = await postJson("/assessments/11111111-1111-1111-1111-111111111111/extract", {
+    transcript: "a note",
+  });
+  expect(res.status).toBe(404);
+});
+
+test("POST /assessments/:id/extract-audio -> 400 when no audio is uploaded", async () => {
+  const res = await server.fetch(
+    new Request(`http://localhost/assessments/${assessmentId}/extract-audio`, { method: "POST" }),
+  );
+  expect(res.status).toBe(400);
+});
+
+test("POST /assessments/:id/extract-audio -> 404 for an unknown assessment", async () => {
+  const form = new FormData();
+  form.append("audio", new File(["fake audio"], "note.m4a", { type: "audio/m4a" }));
+  const res = await server.fetch(
+    new Request("http://localhost/assessments/11111111-1111-1111-1111-111111111111/extract-audio", {
+      method: "POST",
+      body: form,
+    }),
+  );
+  expect(res.status).toBe(404);
 });
 
 test("GET /visits/:id reflects the assessment summary (answered, not yet complete)", async () => {

@@ -2,6 +2,7 @@ import OpenAI from "openai";
 import { zodResponseFormat } from "openai/helpers/zod";
 import { z } from "zod";
 import type { CallCodingModel } from "./diagnosis-suggestions.ts";
+import type { CallExtractModel } from "./answer-suggestions.ts";
 
 // The model picks from the supplied diagnoses by id; the caller re-validates the ids
 // (structured output guarantees the JSON shape, not that an id is real).
@@ -41,3 +42,43 @@ export const callCodingModel: CallCodingModel = async (diagnoses) => {
   if (!parsed) throw new Error("model returned no structured output");
   return parsed;
 };
+
+const extractedAnswersSchema = z.object({
+  answers: z.array(
+    z.object({
+      itemCode: z.string(),
+      value: z.string(),
+      transcriptSnippet: z.string(),
+      confidence: z.number(),
+    }),
+  ),
+});
+
+const extractSystemPrompt = `You are a home-health OASIS documentation assistant. You are given a transcript of a home visit — a clinician and a patient talking — and a list of OASIS items, each with its allowed response options. For every item the transcript gives evidence about, pick the response value that best matches. Quote the exact phrase from the transcript that supports it and give a confidence from 0 to 1.
+
+Use only each item's listed response values. Omit any item the transcript does not address — never guess an answer without evidence.`;
+
+export const callExtractModel: CallExtractModel = async (items, transcript) => {
+  client ??= new OpenAI();
+  const completion = await client.chat.completions.parse({
+    model: "gpt-4o",
+    messages: [
+      { role: "system", content: extractSystemPrompt },
+      { role: "user", content: JSON.stringify({ items, transcript }) },
+    ],
+    response_format: zodResponseFormat(extractedAnswersSchema, "extracted_answers"),
+  });
+  const parsed = completion.choices[0]?.message.parsed;
+  if (!parsed) throw new Error("model returned no structured output");
+  return parsed.answers;
+};
+
+// Transcribes recorded visit audio to text; the endpoint feeds the result to extractAnswers.
+export async function transcribeAudio(audio: File): Promise<string> {
+  client ??= new OpenAI();
+  const result = await client.audio.transcriptions.create({
+    file: audio,
+    model: "gpt-4o-transcribe",
+  });
+  return result.text;
+}
