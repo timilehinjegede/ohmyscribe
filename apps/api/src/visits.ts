@@ -1,8 +1,9 @@
-import { and, count, desc, eq, isNull } from "drizzle-orm";
+import { and, count, desc, eq, isNull, sql } from "drizzle-orm";
 import {
   assessmentAnswers,
   assessments,
   diagnoses,
+  diagnosisCodings,
   patients,
   visits,
   type Db,
@@ -58,6 +59,12 @@ export async function getVisit(db: Db, id: string) {
         id: assessments.id,
         completedAt: assessments.completedAt,
         answeredCount: count(assessmentAnswers.id),
+        // Correlated subquery (not a second join, which would multiply against the answers).
+        codedCount: sql<number>`(
+          select count(*) from ${diagnosisCodings}
+          where ${diagnosisCodings.assessmentId} = ${assessments.id}
+            and ${diagnosisCodings.deletedAt} is null
+        )`,
       })
       .from(assessments)
       .leftJoin(
@@ -76,6 +83,7 @@ export async function getVisit(db: Db, id: string) {
     ? {
         id: summary.id,
         answeredCount: Number(summary.answeredCount),
+        codedCount: Number(summary.codedCount),
         completedAt: summary.completedAt,
       }
     : null;

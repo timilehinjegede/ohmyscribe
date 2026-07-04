@@ -8,7 +8,7 @@ import {
   getOrCreateAssessment,
   upsertAnswers,
 } from "./assessments.ts";
-import { getCodedDiagnoses, upsertCoding } from "./diagnosis-codings.ts";
+import { getCodedDiagnoses, removeCoding, upsertCoding } from "./diagnosis-codings.ts";
 import { db } from "./db.ts";
 import { getVisit, listVisits } from "./visits.ts";
 
@@ -113,6 +113,29 @@ app.patch(
     if (assessment.completedAt) return c.json({ error: "assessment is complete" }, 409);
     const ok = await upsertCoding(db, id, coding);
     if (!ok) return c.json({ error: "diagnosis not in this assessment" }, 422);
+    return c.json(await getCodedDiagnoses(db, id));
+  },
+);
+
+app.delete(
+  "/assessments/:id/codings/:diagnosisId",
+  zValidator(
+    "param",
+    z.object({ id: z.string().uuid(), diagnosisId: z.string().uuid() }),
+    (result, c) => {
+      if (!result.success) return c.json({ error: "invalid id" }, 400);
+    },
+  ),
+  zValidator("json", z.object({ updatedAt: z.string().datetime() }), (result, c) => {
+    if (!result.success) return c.json({ error: "invalid body" }, 400);
+  }),
+  async (c) => {
+    const { id, diagnosisId } = c.req.valid("param");
+    const { updatedAt } = c.req.valid("json");
+    const assessment = await getAssessment(db, id);
+    if (!assessment) return c.json({ error: "assessment not found" }, 404);
+    if (assessment.completedAt) return c.json({ error: "assessment is complete" }, 409);
+    await removeCoding(db, id, diagnosisId, updatedAt);
     return c.json(await getCodedDiagnoses(db, id));
   },
 );

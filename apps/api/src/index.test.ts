@@ -102,6 +102,14 @@ const patch = (path: string, body: unknown) =>
       body: JSON.stringify(body),
     }),
   );
+const del = (path: string, body: unknown) =>
+  server.fetch(
+    new Request(`http://localhost${path}`, {
+      method: "DELETE",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    }),
+  );
 
 test("GET /health -> 200", async () => {
   const res = await get("/health");
@@ -261,7 +269,7 @@ test("PATCH /assessments/:id/codings -> 400 on a code outside the allowlist", as
   expect(res.status).toBe(400);
 });
 
-test("PATCH /assessments/:id/codings -> a new primary demotes the previous one", async () => {
+test("PATCH /assessments/:id/codings -> a new primary returns the old one to the pool", async () => {
   const res = await patch(`/assessments/${assessmentId}/codings`, {
     diagnosisId: asthmaId,
     icd10Code: "J45.909",
@@ -270,7 +278,8 @@ test("PATCH /assessments/:id/codings -> a new primary demotes the previous one",
   });
   const coded = z.array(codedDiagnosisSchema).parse(await res.json());
   expect(coded.find((d) => d.diagnosisId === asthmaId)?.coding?.isPrimary).toBe(true);
-  expect(coded.find((d) => d.diagnosisId === hypertensionId)?.coding?.isPrimary).toBe(false);
+  // the demoted primary goes back to the suggestion pool, not silently into the secondaries
+  expect(coded.find((d) => d.diagnosisId === hypertensionId)?.coding).toBeNull();
 });
 
 test("PATCH /assessments/:id/codings -> 422 for a diagnosis not in this assessment's visit", async () => {
@@ -320,12 +329,49 @@ test("PATCH /assessments/:id/codings: a stale primary write can't blank the prim
   expect(primaries[0]?.diagnosisId).toBe(asthmaId);
 });
 
+test("DELETE /assessments/:id/codings/:diagnosisId returns a coding to the suggestion pool", async () => {
+  // add hypertension as a secondary, then remove it with a later clock (LWW)
+  const added = new Date();
+  await patch(`/assessments/${assessmentId}/codings`, {
+    diagnosisId: hypertensionId,
+    icd10Code: "I10",
+    isPrimary: false,
+    updatedAt: added.toISOString(),
+  });
+  const res = await del(`/assessments/${assessmentId}/codings/${hypertensionId}`, {
+    updatedAt: new Date(added.getTime() + 1000).toISOString(),
+  });
+  expect(res.status).toBe(200);
+  const coded = z.array(codedDiagnosisSchema).parse(await res.json());
+  expect(coded.find((d) => d.diagnosisId === hypertensionId)?.coding).toBeNull();
+  expect(coded.find((d) => d.diagnosisId === asthmaId)?.coding?.isPrimary).toBe(true);
+});
+
+test("DELETE /assessments/:id/codings/:diagnosisId ignores a stale remove (last-write-wins)", async () => {
+  // future clock so this save is unambiguously the newest write to the shared row
+  const addAt = new Date(Date.now() + 120_000);
+  await patch(`/assessments/${assessmentId}/codings`, {
+    diagnosisId: hypertensionId,
+    icd10Code: "I10",
+    isPrimary: false,
+    updatedAt: addAt.toISOString(),
+  });
+  // a remove with an older clock than that save must not delete it
+  const res = await del(`/assessments/${assessmentId}/codings/${hypertensionId}`, {
+    updatedAt: new Date(addAt.getTime() - 60_000).toISOString(),
+  });
+  expect(res.status).toBe(200);
+  const coded = z.array(codedDiagnosisSchema).parse(await res.json());
+  expect(coded.find((d) => d.diagnosisId === hypertensionId)?.coding).not.toBeNull();
+});
+
 test("GET /visits/:id reflects the assessment summary (answered, not yet complete)", async () => {
   const res = await get(`/visits/${visitId}`);
   const body = visitDetailSchema.parse(await res.json());
   expect(body.assessment).not.toBeNull();
   expect(body.assessment?.completedAt).toBeNull();
   expect(body.assessment?.answeredCount).toBeGreaterThan(0);
+  expect(body.assessment?.codedCount).toBeGreaterThan(0);
 });
 
 test("POST /assessments/:id/complete -> 200, sets completedAt", async () => {
