@@ -1,4 +1,4 @@
-import { index, pgTable, text, unique, uuid } from "drizzle-orm/pg-core";
+import { index, pgTable, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
 import { syncColumns } from "./columns.ts";
 import { visits } from "./visits.ts";
 
@@ -14,6 +14,9 @@ export const diagnoses = pgTable(
     system: text("system").notNull(),
     code: text("code").notNull(),
     display: text("display"),
+    // Condition.onsetDateTime — the ranking signal for primary-diagnosis suggestions
+    // (nullable: not all conditions carry it).
+    onset: timestamp("onset", { withTimezone: true, mode: "date" }),
   },
   (t) => [
     index("diagnoses_server_seq_idx").on(t.serverSeq),

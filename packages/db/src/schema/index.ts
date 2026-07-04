@@ -5,6 +5,7 @@ export * from "./visits.ts";
 export * from "./diagnoses.ts";
 export * from "./assessments.ts";
 export * from "./assessment-answers.ts";
+export * from "./diagnosis-codings.ts";
 export * from "./suggestions.ts";
 export * from "./quality-flags.ts";
 export * from "./audit-logs.ts";
