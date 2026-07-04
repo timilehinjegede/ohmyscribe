@@ -34,6 +34,13 @@ async function removeCoding(assessmentId: string, diagnosisId: string) {
   return codedDiagnosesSchema.parse(await res.json());
 }
 
+async function suggestCoding(assessmentId: string) {
+  const res = await fetch(`${API_URL}/assessments/${assessmentId}/suggest-coding`, {
+    method: "POST",
+  });
+  if (!res.ok) throw new HttpError(res.status, `suggest coding failed (${res.status})`);
+}
+
 export function useCodedDiagnoses(assessmentId: string) {
   return useQuery({
     queryKey: ["coded-diagnoses", assessmentId],
@@ -53,12 +60,16 @@ function useCodingMutation<TVariables>(
   const queryKey = ["coded-diagnoses", assessmentId];
   return useMutation({
     mutationFn,
-    onSuccess: (view) => queryClient.setQueryData(queryKey, view),
+    onSuccess: (view) => {
+      queryClient.setQueryData(queryKey, view);
+      queryClient.invalidateQueries({ queryKey: ["visits", visitId] });
+    },
     onError: (error) => {
-      // Completed elsewhere: refetch codings and flip the wizard (assessment query) read-only.
+      // Completed elsewhere: refetch codings and flip the wizard + visit detail read-only.
       if (error instanceof HttpError && error.status === 409) {
         queryClient.invalidateQueries({ queryKey });
         queryClient.invalidateQueries({ queryKey: ["assessment", visitId] });
+        queryClient.invalidateQueries({ queryKey: ["visits", visitId] });
       }
     },
   });
@@ -74,4 +85,14 @@ export function useRemoveCoding(visitId: string, assessmentId: string) {
   return useCodingMutation(visitId, assessmentId, (diagnosisId: string) =>
     removeCoding(assessmentId, diagnosisId),
   );
+}
+
+// Best-effort: no onError, so a failure (offline) is swallowed and the nurse just codes manually.
+export function useSuggestCoding(assessmentId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => suggestCoding(assessmentId),
+    // Refetch, not overwrite: a slow first draft must not clobber a coding made while it was in flight.
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["coded-diagnoses", assessmentId] }),
+  });
 }

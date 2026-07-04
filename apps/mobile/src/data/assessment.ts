@@ -49,6 +49,11 @@ export function useSaveAnswer(visitId: string, assessmentId: string) {
       }
       return { previous };
     },
+    onSuccess: (_updated, _answer, context) => {
+      if (context?.previous?.answers.length === 0) {
+        queryClient.invalidateQueries({ queryKey: ["visits", visitId] });
+      }
+    },
     onError: (error, _answer, context) => {
       if (context?.previous) queryClient.setQueryData(queryKey, context.previous);
       // A 409 means it was completed elsewhere — refetch so the wizard flips to read-only.
