@@ -27,11 +27,17 @@ export async function extractAnswers(
   transcript: string,
   callModel: CallExtractModel,
 ): Promise<number> {
-  const items: TranscriptItem[] = OASIS_ITEMS.map((item) => ({
-    code: item.code,
-    label: item.label,
-    responses: item.responses.map((response) => ({ value: response.value, label: response.label })),
-  }));
+  // TODO: future improvement -> M1033 is a manual clinical-judgment item (the risk-factor count) — keep it out of the AI draft until we support multi selection.
+  const items: TranscriptItem[] = OASIS_ITEMS.filter((item) => item.code !== "M1033").map(
+    (item) => ({
+      code: item.code,
+      label: item.label,
+      responses: item.responses.map((response) => ({
+        value: response.value,
+        label: response.label,
+      })),
+    }),
+  );
 
   const extracted = await callModel(items, transcript);
 

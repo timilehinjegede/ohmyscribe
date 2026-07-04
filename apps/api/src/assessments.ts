@@ -1,5 +1,6 @@
 import { and, eq, isNotNull, isNull, sql } from "drizzle-orm";
-import { answerSuggestions, assessmentAnswers, assessments, type Db } from "@ohmyscribe/db";
+import { answerSuggestions, assessmentAnswers, assessments, visits, type Db } from "@ohmyscribe/db";
+import type { PdgmResult } from "@ohmyscribe/shared";
 
 // Idempotent create-or-return: a retried or concurrent POST conflicts on the visitId
 // unique and re-reads the existing row instead of inserting a second assessment.
@@ -22,6 +23,7 @@ export async function getAssessment(db: Db, assessmentId: string) {
       id: assessments.id,
       visitId: assessments.visitId,
       completedAt: assessments.completedAt,
+      pdgmSnapshot: assessments.pdgmSnapshot,
     })
     .from(assessments)
     .where(and(eq(assessments.id, assessmentId), isNull(assessments.deletedAt)));
@@ -51,7 +53,12 @@ export async function getAssessment(db: Db, assessmentId: string) {
     );
   // suggestedValue is nullable in the table but /extract always sets it; the filter guarantees it.
   const suggestions = suggestionRows.map((row) => ({ ...row, value: row.value! }));
-  return { ...assessment, answers, suggestions };
+  return {
+    ...assessment,
+    pdgmSnapshot: assessment.pdgmSnapshot as PdgmResult | null,
+    answers,
+    suggestions,
+  };
 }
 
 export async function upsertAnswers(
@@ -80,16 +87,26 @@ export async function upsertAnswers(
     });
 }
 
-export async function completeAssessment(db: Db, assessmentId: string) {
+// Files the assessment: freezes the PDGM snapshot, stamps completedAt, and marks the visit
+// complete — atomically, so a filed record is all three or none.
+export async function completeAssessment(db: Db, assessmentId: string, pdgm: PdgmResult) {
   const now = new Date();
-  await db
-    .update(assessments)
-    .set({ completedAt: now, updatedAt: now })
-    .where(
-      and(
-        eq(assessments.id, assessmentId),
-        isNull(assessments.deletedAt),
-        isNull(assessments.completedAt),
-      ),
-    );
+  await db.transaction(async (tx) => {
+    const [assessment] = await tx
+      .select({ visitId: assessments.visitId })
+      .from(assessments)
+      .where(
+        and(
+          eq(assessments.id, assessmentId),
+          isNull(assessments.deletedAt),
+          isNull(assessments.completedAt),
+        ),
+      );
+    if (!assessment) return; // already complete or gone — idempotent
+    await tx
+      .update(assessments)
+      .set({ completedAt: now, updatedAt: now, pdgmSnapshot: pdgm })
+      .where(and(eq(assessments.id, assessmentId), isNull(assessments.completedAt)));
+    await tx.update(visits).set({ status: "complete" }).where(eq(visits.id, assessment.visitId));
+  });
 }

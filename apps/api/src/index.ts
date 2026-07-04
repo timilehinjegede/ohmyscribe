@@ -1,7 +1,14 @@
 import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
 import { z } from "zod";
-import { extractRequestSchema, upsertAnswersSchema, upsertCodingSchema } from "@ohmyscribe/shared";
+import {
+  ADMISSION_SOURCES,
+  TIMINGS,
+  completeRequestSchema,
+  extractRequestSchema,
+  upsertAnswersSchema,
+  upsertCodingSchema,
+} from "@ohmyscribe/shared";
 import {
   completeAssessment,
   getAssessment,
@@ -11,6 +18,7 @@ import {
 import { extractAnswers } from "./answer-suggestions.ts";
 import { getCodedDiagnoses, removeCoding, upsertCoding } from "./diagnosis-codings.ts";
 import { suggestCoding } from "./diagnosis-suggestions.ts";
+import { computeAssessmentPdgm } from "./pdgm.ts";
 import { callCodingModel, callExtractModel, transcribeAudio } from "./openai.ts";
 import { db } from "./db.ts";
 import { getVisit, listVisits } from "./visits.ts";
@@ -126,11 +134,20 @@ app.post(
   zValidator("param", z.object({ id: z.string().uuid() }), (result, c) => {
     if (!result.success) return c.json({ error: "invalid assessment id" }, 400);
   }),
+  zValidator("json", completeRequestSchema, (result, c) => {
+    if (!result.success) return c.json({ error: "invalid completion" }, 400);
+  }),
   async (c) => {
     const { id } = c.req.valid("param");
-    const assessment = await getAssessment(db, id);
-    if (!assessment) return c.json({ error: "assessment not found" }, 404);
-    await completeAssessment(db, id);
+    const { timing, admissionSource } = c.req.valid("json");
+    // Snapshot the grouping as it stands, then file it (assessment + visit) in one transaction.
+    const pdgm = await computeAssessmentPdgm(db, id, timing, admissionSource);
+    if (!pdgm) return c.json({ error: "assessment not found" }, 404);
+    // Can't file without a primary diagnosis — it drives the clinical group.
+    if (!pdgm.clinicalGroupDriver) {
+      return c.json({ error: "a primary diagnosis is required to file" }, 422);
+    }
+    await completeAssessment(db, id, pdgm);
     return c.json(await getAssessment(db, id));
   },
 );
@@ -145,6 +162,36 @@ app.get(
     const coded = await getCodedDiagnoses(db, id);
     if (!coded) return c.json({ error: "assessment not found" }, 404);
     return c.json(coded);
+  },
+);
+
+app.get(
+  "/assessments/:id/pdgm",
+  zValidator("param", z.object({ id: z.string().uuid() }), (result, c) => {
+    if (!result.success) return c.json({ error: "invalid assessment id" }, 400);
+  }),
+  zValidator(
+    "query",
+    z.object({
+      timing: z.enum(TIMINGS).default("early"),
+      admissionSource: z.enum(ADMISSION_SOURCES).default("community"),
+    }),
+    (result, c) => {
+      if (!result.success) return c.json({ error: "invalid timing or admission source" }, 400);
+    },
+  ),
+  async (c) => {
+    const { id } = c.req.valid("param");
+    const assessment = await getAssessment(db, id);
+    if (!assessment) return c.json({ error: "assessment not found" }, 404);
+    // Completed → the frozen snapshot; draft → live compute with the client's toggle.
+    if (assessment.completedAt && assessment.pdgmSnapshot) {
+      return c.json(assessment.pdgmSnapshot);
+    }
+    const { timing, admissionSource } = c.req.valid("query");
+    const pdgm = await computeAssessmentPdgm(db, id, timing, admissionSource);
+    if (!pdgm) return c.json({ error: "assessment not found" }, 404);
+    return c.json(pdgm);
   },
 );
 

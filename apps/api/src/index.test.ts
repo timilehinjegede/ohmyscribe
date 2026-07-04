@@ -539,6 +539,13 @@ test("POST /assessments/:id/extract-audio -> 400 when no audio is uploaded", asy
   expect(res.status).toBe(400);
 });
 
+test("GET /assessments/:id/pdgm -> 404 for an unknown assessment", async () => {
+  const res = await server.fetch(
+    new Request("http://localhost/assessments/11111111-1111-1111-1111-111111111111/pdgm"),
+  );
+  expect(res.status).toBe(404);
+});
+
 test("POST /assessments/:id/extract-audio -> 404 for an unknown assessment", async () => {
   const form = new FormData();
   form.append("audio", new File(["fake audio"], "note.m4a", { type: "audio/m4a" }));
@@ -561,7 +568,10 @@ test("GET /visits/:id reflects the assessment summary (answered, not yet complet
 });
 
 test("POST /assessments/:id/complete -> 200, sets completedAt", async () => {
-  const res = await post(`/assessments/${assessmentId}/complete`);
+  const res = await postJson(`/assessments/${assessmentId}/complete`, {
+    timing: "early",
+    admissionSource: "community",
+  });
   expect(res.status).toBe(200);
   const body = assessmentDetailSchema.parse(await res.json());
   expect(body.completedAt).not.toBeNull();
@@ -569,13 +579,32 @@ test("POST /assessments/:id/complete -> 200, sets completedAt", async () => {
 });
 
 test("POST /assessments/:id/complete is write-once (repeat keeps the original timestamp)", async () => {
-  const res = await post(`/assessments/${assessmentId}/complete`);
+  const res = await postJson(`/assessments/${assessmentId}/complete`, {
+    timing: "early",
+    admissionSource: "community",
+  });
   const body = assessmentDetailSchema.parse(await res.json());
   expect(body.completedAt).toBe(completedAt);
 });
 
+test("GET /pdgm returns the frozen snapshot once complete, ignoring the toggle", async () => {
+  const res = await get(`/assessments/${assessmentId}/pdgm?admissionSource=institutional`);
+  expect(res.status).toBe(200);
+  const body = (await res.json()) as { admissionSource: string };
+  // Filed with community; the snapshot stays community even when queried institutional.
+  expect(body.admissionSource).toBe("community");
+});
+
+test("GET /assessments/:id/pdgm -> 400 for an invalid toggle value", async () => {
+  const res = await get(`/assessments/${assessmentId}/pdgm?timing=nonsense`);
+  expect(res.status).toBe(400);
+});
+
 test("POST /assessments/:id/complete -> 404 for an unknown assessment", async () => {
-  const res = await post("/assessments/11111111-1111-1111-1111-111111111111/complete");
+  const res = await postJson("/assessments/11111111-1111-1111-1111-111111111111/complete", {
+    timing: "early",
+    admissionSource: "community",
+  });
   expect(res.status).toBe(404);
 });
 
