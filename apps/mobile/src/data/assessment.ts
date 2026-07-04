@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { FileSystemUploadType, uploadAsync } from "expo-file-system/legacy";
 import { assessmentDetailSchema, type AssessmentDetail } from "@ohmyscribe/shared";
 
 import { API_URL } from "@/config";
@@ -79,5 +80,27 @@ export function useCompleteAssessment(visitId: string, assessmentId: string) {
       // Refresh the visit detail so its button flips to "Review".
       queryClient.invalidateQueries({ queryKey: ["visits", visitId] });
     },
+  });
+}
+
+async function extractFromAudio(assessmentId: string, uri: string) {
+  // Expo SDK 57's FormData rejects React Native's { uri } file part, so upload via the native
+  // multipart uploader instead of fetch + FormData.
+  const result = await uploadAsync(`${API_URL}/assessments/${assessmentId}/extract-audio`, uri, {
+    httpMethod: "POST",
+    uploadType: FileSystemUploadType.MULTIPART,
+    fieldName: "audio",
+    mimeType: "audio/m4a",
+  });
+  if (result.status < 200 || result.status >= 300) {
+    throw new HttpError(result.status, `extract failed (${result.status})`);
+  }
+}
+
+export function useExtractAudio(visitId: string, assessmentId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (uri: string) => extractFromAudio(assessmentId, uri),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["assessment", visitId] }),
   });
 }
