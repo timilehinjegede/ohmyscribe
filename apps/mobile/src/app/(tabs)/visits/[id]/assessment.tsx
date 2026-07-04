@@ -1,13 +1,13 @@
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useLocalSearchParams } from "expo-router";
 import { useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { oasisItemsBySection, oasisSections } from "@ohmyscribe/shared";
 
+import { DiagnosisCodingStep } from "@/components/diagnosis-coding-step";
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import { Spacing } from "@/constants/theme";
 import { useAssessment, useCompleteAssessment, useSaveAnswer } from "@/data/assessment";
-import { useVisit } from "@/data/visits";
 
 // A read-only diagnoses review, then one step per catalog section.
 const STEPS = ["diagnoses", ...oasisSections] as const;
@@ -20,15 +20,13 @@ const STEP_TITLES: Record<(typeof STEPS)[number], string> = {
 
 export default function AssessmentWizard() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const router = useRouter();
   const [stepIndex, setStepIndex] = useState(0);
 
-  const visit = useVisit(id);
   const assessment = useAssessment(id);
   const saveAnswer = useSaveAnswer(id, assessment.data?.id ?? "");
   const completeAssessment = useCompleteAssessment(id, assessment.data?.id ?? "");
 
-  if ((assessment.isPending || visit.isPending) && id) {
+  if (assessment.isPending && id) {
     return (
       <ThemedView style={styles.centered}>
         <ActivityIndicator />
@@ -36,17 +34,11 @@ export default function AssessmentWizard() {
     );
   }
 
-  if (assessment.isError || !assessment.data || visit.isError || !visit.data) {
+  if (assessment.isError || !assessment.data) {
     return (
       <ThemedView style={styles.centered}>
-        <ThemedText themeColor="textSecondary">Couldn't load the assessment.</ThemedText>
-        <Pressable
-          onPress={() => {
-            assessment.refetch();
-            visit.refetch();
-          }}
-          hitSlop={8}
-        >
+        <ThemedText themeColor="textSecondary">Could not load the assessment.</ThemedText>
+        <Pressable onPress={() => assessment.refetch()} hitSlop={8}>
           <ThemedText type="linkPrimary">Retry</ThemedText>
         </Pressable>
       </ThemedView>
@@ -68,25 +60,18 @@ export default function AssessmentWizard() {
         <ThemedText type="subtitle">{STEP_TITLES[step]}</ThemedText>
         {saveAnswer.isError ? (
           <ThemedText type="small" themeColor="textSecondary">
-            Couldn't save — check your connection.
+            Could not save — check your connection.
           </ThemedText>
         ) : null}
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>
         {step === "diagnoses" ? (
-          visit.data.diagnoses.length === 0 ? (
-            <ThemedText themeColor="textSecondary">No diagnoses on file.</ThemedText>
-          ) : (
-            visit.data.diagnoses.map((diagnosis) => (
-              <ThemedView key={diagnosis.id} type="backgroundElement" style={styles.item}>
-                <ThemedText type="default">{diagnosis.display ?? diagnosis.code}</ThemedText>
-                <ThemedText type="small" themeColor="textSecondary">
-                  {diagnosis.system} · {diagnosis.code}
-                </ThemedText>
-              </ThemedView>
-            ))
-          )
+          <DiagnosisCodingStep
+            visitId={id}
+            assessmentId={assessment.data.id}
+            isComplete={isComplete}
+          />
         ) : (
           oasisItemsBySection[step].map((item) => {
             const current = answers.get(item.code);

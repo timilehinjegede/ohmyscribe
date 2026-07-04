@@ -30,9 +30,10 @@ export default function VisitDetailScreen() {
   }
 
   const assessment = visit.assessment;
+  const started = (assessment?.answeredCount ?? 0) > 0 || (assessment?.codedCount ?? 0) > 0;
   const assessmentLabel = assessment?.completedAt
     ? "Review assessment"
-    : (assessment?.answeredCount ?? 0) > 0
+    : started
       ? "Continue assessment"
       : "Start assessment";
 
