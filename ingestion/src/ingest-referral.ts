@@ -89,6 +89,7 @@ export async function ingestReferral(
             system: diagnosis.system,
             code: diagnosis.code,
             display: diagnosis.display ?? null,
+            onset: toDate(diagnosis.onset),
           })),
         )
         // parser already dedups; this keeps the unique constraint from aborting
@@ -133,3 +134,10 @@ function stableString(bundle: unknown): string {
 }
 
 const errorMessage = (err: unknown) => (err instanceof Error ? err.message : String(err));
+
+// onsetDateTime is untrusted; an unparseable value stores null rather than throwing.
+const toDate = (value?: string): Date | null => {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+};

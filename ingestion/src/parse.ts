@@ -60,6 +60,7 @@ function extractDiagnoses(conditions: FhirResource[]): Diagnosis[] {
         system,
         code,
         display: str(coding.display) || undefined,
+        onset: str(c.onsetDateTime) || undefined,
       });
     }
   }

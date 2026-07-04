@@ -1,12 +1,13 @@
 import { expect, test } from "bun:test";
 import { parseReferral } from "./parse.ts";
 
-function condition(status: string, code: string, display: string) {
+function condition(status: string, code: string, display: string, onset?: string) {
   return {
     resource: {
       resourceType: "Condition",
       clinicalStatus: { coding: [{ code: status }] },
       code: { coding: [{ system: "http://snomed.info/sct", code, display }] },
+      ...(onset ? { onsetDateTime: onset } : {}),
     },
   };
 }
@@ -23,10 +24,11 @@ const bundle = {
         address: [{ line: ["1 Main St"], city: "Boston", state: "MA", postalCode: "02101" }],
       },
     },
-    condition("active", "111", "Anemia (disorder)"),
+    condition("active", "111", "Anemia (disorder)", "1990-05-01T00:00:00Z"),
     condition("active", "222", "Full-time employment (finding)"), // finding -> dropped
     condition("resolved", "333", "Old problem (disorder)"), // inactive -> dropped
     condition("active", "111", "Anemia (disorder)"), // duplicate -> deduped
+    condition("active", "444", "Asthma (disorder)"), // no onsetDateTime -> onset omitted
   ],
 };
 
@@ -39,10 +41,11 @@ test("parseReferral extracts patient demographics", () => {
   expect(r.address).toBe("1 Main St, Boston, MA, 02101");
 });
 
-test("diagnoses: active disorders only, findings + inactive dropped, deduped", () => {
+test("diagnoses: active disorders only, findings + inactive dropped, deduped, onset captured", () => {
   const r = parseReferral(bundle);
   expect(r.diagnoses).toEqual([
-    { system: "http://snomed.info/sct", code: "111", display: "Anemia (disorder)" },
+    { system: "http://snomed.info/sct", code: "111", display: "Anemia (disorder)", onset: "1990-05-01T00:00:00Z" },
+    { system: "http://snomed.info/sct", code: "444", display: "Asthma (disorder)" },
   ]);
 });
 

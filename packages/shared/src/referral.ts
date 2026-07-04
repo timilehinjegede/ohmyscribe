@@ -4,6 +4,8 @@ export const diagnosisSchema = z.object({
   system: z.string(),
   code: z.string().min(1),
   display: z.string().optional(),
+  // onsetDateTime, the ranking signal for primary-diagnosis suggestions.
+  onset: z.string().optional(),
 });
 export type Diagnosis = z.infer<typeof diagnosisSchema>;
 
