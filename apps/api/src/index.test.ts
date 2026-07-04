@@ -5,6 +5,7 @@ import {
   assessments,
   diagnoses,
   diagnosisCodings,
+  diagnosisSuggestions,
   patients,
   visits,
 } from "@ohmyscribe/db";
@@ -16,6 +17,7 @@ import {
 } from "@ohmyscribe/shared";
 import { z } from "zod";
 import { db } from "./db.ts";
+import { selectPicks, suggestCoding } from "./diagnosis-suggestions.ts";
 import server from "./index.ts";
 
 // Integration tests: they hit the real Postgres (DATABASE_URL must be set) via the
@@ -83,6 +85,7 @@ afterAll(async () => {
   for (const row of rows) {
     await db.delete(assessmentAnswers).where(eq(assessmentAnswers.assessmentId, row.id));
     await db.delete(diagnosisCodings).where(eq(diagnosisCodings.assessmentId, row.id));
+    await db.delete(diagnosisSuggestions).where(eq(diagnosisSuggestions.assessmentId, row.id));
   }
   await db.delete(assessments).where(eq(assessments.visitId, visitId));
   await db.delete(diagnoses).where(eq(diagnoses.visitId, visitId));
@@ -323,9 +326,9 @@ test("PATCH /assessments/:id/codings: a stale primary write can't blank the prim
     isPrimary: true,
     updatedAt: stale,
   });
-  const coded = z.array(codedDiagnosisSchema).parse(
-    await (await get(`/assessments/${assessmentId}/diagnoses`)).json(),
-  );
+  const coded = z
+    .array(codedDiagnosisSchema)
+    .parse(await (await get(`/assessments/${assessmentId}/diagnoses`)).json());
   const primaries = coded.filter((d) => d.coding?.isPrimary);
   expect(primaries).toHaveLength(1);
   expect(primaries[0]?.diagnosisId).toBe(asthmaId);
@@ -365,6 +368,110 @@ test("DELETE /assessments/:id/codings/:diagnosisId ignores a stale remove (last-
   expect(res.status).toBe(200);
   const coded = z.array(codedDiagnosisSchema).parse(await res.json());
   expect(coded.find((d) => d.diagnosisId === hypertensionId)?.coding).not.toBeNull();
+});
+
+// The real CallCodingModel hits OpenAI; these stubs keep the suggestion tests deterministic/offline.
+const clearSuggestions = () =>
+  db.delete(diagnosisSuggestions).where(eq(diagnosisSuggestions.assessmentId, assessmentId));
+
+test("suggestCoding writes the model's primary + secondary role picks", async () => {
+  await clearSuggestions();
+  await suggestCoding(db, assessmentId, async () => ({
+    primary: { diagnosisId: hypertensionId, rationale: "chief reason for care", confidence: 0.9 },
+    secondaries: [{ diagnosisId: asthmaId, rationale: "managed comorbidity", confidence: 0.6 }],
+  }));
+  const coded = z
+    .array(codedDiagnosisSchema)
+    .parse(await (await get(`/assessments/${assessmentId}/diagnoses`)).json());
+  expect(coded.find((d) => d.diagnosisId === hypertensionId)?.suggestion?.isPrimary).toBe(true);
+  expect(coded.find((d) => d.diagnosisId === hypertensionId)?.suggestion?.rationale).toBe(
+    "chief reason for care",
+  );
+  expect(coded.find((d) => d.diagnosisId === asthmaId)?.suggestion?.isPrimary).toBe(false);
+});
+
+test("suggestCoding is cached — a second call skips the model", async () => {
+  await clearSuggestions();
+  let calls = 0;
+  const counting = async () => {
+    calls++;
+    return {
+      primary: { diagnosisId: hypertensionId, rationale: "cached", confidence: 0.5 },
+      secondaries: [],
+    };
+  };
+  await suggestCoding(db, assessmentId, counting);
+  await suggestCoding(db, assessmentId, counting);
+  expect(calls).toBe(1);
+});
+
+test("suggestCoding drops diagnosis ids the model invents", async () => {
+  await clearSuggestions();
+  await suggestCoding(db, assessmentId, async () => ({
+    primary: {
+      diagnosisId: "11111111-1111-1111-1111-111111111111",
+      rationale: "invented",
+      confidence: 0.9,
+    },
+    secondaries: [{ diagnosisId: asthmaId, rationale: "real", confidence: 0.6 }],
+  }));
+  const coded = z
+    .array(codedDiagnosisSchema)
+    .parse(await (await get(`/assessments/${assessmentId}/diagnoses`)).json());
+  // the invented primary is dropped; only the real secondary survives
+  expect(coded.some((d) => d.suggestion?.isPrimary)).toBe(false);
+  expect(coded.find((d) => d.diagnosisId === asthmaId)?.suggestion?.isPrimary).toBe(false);
+});
+
+test("suggestCoding is best-effort — a model failure writes nothing", async () => {
+  await clearSuggestions();
+  await suggestCoding(db, assessmentId, async () => {
+    throw new Error("model unavailable");
+  });
+  const coded = z
+    .array(codedDiagnosisSchema)
+    .parse(await (await get(`/assessments/${assessmentId}/diagnoses`)).json());
+  expect(coded.every((d) => d.suggestion === null)).toBe(true);
+});
+
+test("POST /assessments/:id/suggest-coding -> 404 for an unknown assessment", async () => {
+  const res = await post("/assessments/11111111-1111-1111-1111-111111111111/suggest-coding");
+  expect(res.status).toBe(404);
+});
+
+// Pure unit tests for the id-validation / dedup / cap branches (the fixture is too small to reach
+// them through the DB path: it holds only three diagnoses).
+const secondary = (diagnosisId: string) => ({ diagnosisId, rationale: "", confidence: 1 });
+
+test("selectPicks caps secondaries at five", () => {
+  const ids = new Set(["p", "a", "b", "c", "d", "e", "f"]);
+  const picks = selectPicks(
+    { primary: secondary("p"), secondaries: ["a", "b", "c", "d", "e", "f"].map(secondary) },
+    ids,
+  );
+  expect(picks.filter((pick) => !pick.isPrimary)).toHaveLength(5);
+});
+
+test("selectPicks dedupes a diagnosis suggested as both primary and secondary", () => {
+  const picks = selectPicks(
+    { primary: secondary("x"), secondaries: [secondary("x")] },
+    new Set(["x"]),
+  );
+  expect(picks).toHaveLength(1);
+  expect(picks[0]?.isPrimary).toBe(true);
+});
+
+test("selectPicks keeps secondaries when the primary is null", () => {
+  const picks = selectPicks({ primary: null, secondaries: [secondary("a")] }, new Set(["a"]));
+  expect(picks).toEqual([{ diagnosisId: "a", isPrimary: false, rationale: "", confidence: 1 }]);
+});
+
+test("selectPicks drops an invented secondary id", () => {
+  const picks = selectPicks(
+    { primary: null, secondaries: [secondary("real"), secondary("fake")] },
+    new Set(["real"]),
+  );
+  expect(picks.map((pick) => pick.diagnosisId)).toEqual(["real"]);
 });
 
 test("GET /visits/:id reflects the assessment summary (answered, not yet complete)", async () => {
@@ -413,8 +520,8 @@ test("PATCH /assessments/:id/codings -> 409 once complete, leaving codings uncha
     updatedAt: new Date().toISOString(),
   });
   expect(res.status).toBe(409);
-  const coded = z.array(codedDiagnosisSchema).parse(
-    await (await get(`/assessments/${assessmentId}/diagnoses`)).json(),
-  );
+  const coded = z
+    .array(codedDiagnosisSchema)
+    .parse(await (await get(`/assessments/${assessmentId}/diagnoses`)).json());
   expect(coded.find((d) => d.diagnosisId === asthmaId)?.coding?.isPrimary).toBe(true);
 });

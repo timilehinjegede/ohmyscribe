@@ -9,6 +9,8 @@ import {
   upsertAnswers,
 } from "./assessments.ts";
 import { getCodedDiagnoses, removeCoding, upsertCoding } from "./diagnosis-codings.ts";
+import { suggestCoding } from "./diagnosis-suggestions.ts";
+import { callCodingModel } from "./openai.ts";
 import { db } from "./db.ts";
 import { getVisit, listVisits } from "./visits.ts";
 
@@ -94,6 +96,21 @@ app.get(
     const coded = await getCodedDiagnoses(db, id);
     if (!coded) return c.json({ error: "assessment not found" }, 404);
     return c.json(coded);
+  },
+);
+
+app.post(
+  "/assessments/:id/suggest-coding",
+  zValidator("param", z.object({ id: z.string().uuid() }), (result, c) => {
+    if (!result.success) return c.json({ error: "invalid assessment id" }, 400);
+  }),
+  async (c) => {
+    const { id } = c.req.valid("param");
+    const assessment = await getAssessment(db, id);
+    if (!assessment) return c.json({ error: "assessment not found" }, 404);
+    // Fire-and-forget: the client refetches the coded view (GET /diagnoses); no need to recompute it.
+    await suggestCoding(db, id, callCodingModel);
+    return c.json({ ok: true });
   },
 );
 
