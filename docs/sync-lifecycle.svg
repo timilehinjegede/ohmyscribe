@@ -1,0 +1,81 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 940 662" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="a" markerWidth="10" markerHeight="10" refX="7.5" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#5f7186"/></marker>
+  </defs>
+
+  <rect x="0" y="0" width="940" height="662" fill="#ffffff"/>
+
+  <!-- phase bands -->
+  <rect x="16" y="62" width="908" height="128" rx="8" fill="#eef4fb"/>
+  <text x="30" y="82" font-size="12.5" font-weight="700" fill="#33475b">OFFLINE · documenting a visit</text>
+  <rect x="16" y="200" width="908" height="454" rx="8" fill="#f2f3f5"/>
+  <text x="30" y="220" font-size="12.5" font-weight="700" fill="#33475b">BACK ONLINE · foreground or "Sync now" · push before pull</text>
+
+  <!-- lifelines -->
+  <g stroke="#cfd6de" stroke-width="1.2" stroke-dasharray="4 4">
+    <line x1="72" y1="56" x2="72" y2="644"/>
+    <line x1="230" y1="56" x2="230" y2="644"/>
+    <line x1="388" y1="56" x2="388" y2="644"/>
+    <line x1="546" y1="56" x2="546" y2="644"/>
+    <line x1="704" y1="56" x2="704" y2="644"/>
+    <line x1="862" y1="56" x2="862" y2="644"/>
+  </g>
+
+  <!-- participant headers -->
+  <g font-size="12.5" font-weight="600" text-anchor="middle" fill="#20303f">
+    <rect x="18" y="22" width="108" height="32" rx="7" fill="#ffffff" stroke="#b6c3d4"/><text x="72" y="43">Nurse</text>
+    <rect x="176" y="22" width="108" height="32" rx="7" fill="#ffffff" stroke="#b6c3d4"/><text x="230" y="43">Screen + Hook</text>
+    <rect x="334" y="22" width="108" height="32" rx="7" fill="#ffffff" stroke="#1f7ae0"/><text x="388" y="43">Local SQLite</text>
+    <rect x="492" y="22" width="108" height="32" rx="7" fill="#dbeafe" stroke="#1f7ae0"/><text x="546" y="43">Sync engine</text>
+    <rect x="650" y="22" width="108" height="32" rx="7" fill="#ffffff" stroke="#b6c3d4"/><text x="704" y="43">API /sync</text>
+    <rect x="808" y="22" width="108" height="32" rx="7" fill="#ffffff" stroke="#b6c3d4"/><text x="862" y="43">Postgres</text>
+  </g>
+
+  <!-- messages -->
+  <g font-size="10" fill="#3f566c" text-anchor="middle">
+    <!-- OFFLINE -->
+    <line x1="72" y1="108" x2="228" y2="108" stroke="#5f7186" stroke-width="1.5" marker-end="url(#a)"/>
+    <text x="150" y="101">edit item / code diagnosis</text>
+    <line x1="230" y1="136" x2="386" y2="136" stroke="#5f7186" stroke-width="1.5" marker-end="url(#a)"/>
+    <text x="308" y="129">writeAuthored (pending)</text>
+    <line x1="388" y1="162" x2="232" y2="162" stroke="#8595a6" stroke-width="1.4" stroke-dasharray="4 3" marker-end="url(#a)"/>
+    <text x="308" y="155">rebuilt view (instant, local)</text>
+    <rect x="356" y="170" width="216" height="18" rx="9" fill="#ffffff" stroke="#c6d6e8"/>
+    <text x="464" y="183" font-size="10" fill="#5f7186">Sync tab: "N changes to sync"</text>
+
+    <!-- ONLINE · push -->
+    <line x1="546" y1="250" x2="390" y2="250" stroke="#5f7186" stroke-width="1.5" marker-end="url(#a)"/>
+    <text x="467" y="243">pendingRows()</text>
+    <line x1="546" y1="278" x2="702" y2="278" stroke="#5f7186" stroke-width="1.5" marker-end="url(#a)"/>
+    <text x="625" y="271">POST /sync/push</text>
+    <line x1="704" y1="306" x2="860" y2="306" stroke="#5f7186" stroke-width="1.5" marker-end="url(#a)"/>
+    <text x="783" y="299">upsert (LWW) + server_seq</text>
+    <line x1="862" y1="334" x2="706" y2="334" stroke="#8595a6" stroke-width="1.4" stroke-dasharray="4 3" marker-end="url(#a)"/>
+    <text x="783" y="327">applied / stale / rejected</text>
+    <line x1="704" y1="362" x2="548" y2="362" stroke="#8595a6" stroke-width="1.4" stroke-dasharray="4 3" marker-end="url(#a)"/>
+    <text x="625" y="355">results</text>
+    <line x1="546" y1="390" x2="390" y2="390" stroke="#5f7186" stroke-width="1.5" marker-end="url(#a)"/>
+    <text x="467" y="383">markSynced (version-guarded)</text>
+
+    <!-- divider -->
+    <line x1="30" y1="414" x2="910" y2="414" stroke="#c9cfd7" stroke-width="1" stroke-dasharray="3 4"/>
+    <rect x="436" y="405" width="68" height="18" rx="9" fill="#f2f3f5"/>
+    <text x="470" y="418" font-size="10" fill="#8595a6">then pull</text>
+
+    <!-- ONLINE · pull -->
+    <line x1="546" y1="446" x2="702" y2="446" stroke="#5f7186" stroke-width="1.5" marker-end="url(#a)"/>
+    <text x="625" y="439">GET /sync/pull</text>
+    <line x1="704" y1="474" x2="860" y2="474" stroke="#5f7186" stroke-width="1.5" marker-end="url(#a)"/>
+    <text x="783" y="467">rows above cursor</text>
+    <line x1="862" y1="502" x2="706" y2="502" stroke="#8595a6" stroke-width="1.4" stroke-dasharray="4 3" marker-end="url(#a)"/>
+    <text x="783" y="495">changes + max(seq)</text>
+    <line x1="704" y1="530" x2="548" y2="530" stroke="#8595a6" stroke-width="1.4" stroke-dasharray="4 3" marker-end="url(#a)"/>
+    <text x="625" y="523">changes + cursor</text>
+    <line x1="546" y1="558" x2="390" y2="558" stroke="#5f7186" stroke-width="1.5" marker-end="url(#a)"/>
+    <text x="467" y="551">applyPulled + setCursor</text>
+    <line x1="546" y1="586" x2="232" y2="586" stroke="#5f7186" stroke-width="1.5" marker-end="url(#a)"/>
+    <text x="389" y="579">invalidate, reads refresh</text>
+    <rect x="368" y="596" width="192" height="18" rx="9" fill="#ffffff" stroke="#c6d6e8"/>
+    <text x="464" y="609" font-size="10" fill="#2f9e6f">Sync tab: "All synced"</text>
+  </g>
+</svg>

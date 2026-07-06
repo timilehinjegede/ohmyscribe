@@ -1,0 +1,71 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 860 600" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="ah" markerWidth="10" markerHeight="10" refX="7.5" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#5f7186"/></marker>
+    <marker id="ab" markerWidth="10" markerHeight="10" refX="7.5" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#1f7ae0"/></marker>
+    <marker id="at" markerWidth="10" markerHeight="10" refX="7.5" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#2f9e6f"/></marker>
+  </defs>
+
+  <rect x="0" y="0" width="860" height="600" fill="#ffffff"/>
+
+  <!-- Device -->
+  <rect x="28" y="26" width="804" height="300" rx="14" fill="#eef4fb" stroke="#c6d6e8"/>
+  <text x="50" y="52" font-size="15" font-weight="700" fill="#2c3e52">Device · React Native / Expo</text>
+
+  <rect x="56" y="94" width="244" height="74" rx="9" fill="#ffffff" stroke="#b6c3d4"/>
+  <text x="178" y="126" font-size="14" font-weight="600" fill="#20303f" text-anchor="middle">Screens</text>
+  <text x="178" y="148" font-size="11" fill="#5f7186" text-anchor="middle">Visits · Assessment · Coding · Sync</text>
+
+  <rect x="420" y="82" width="366" height="112" rx="9" fill="#ffffff" stroke="#1f7ae0" stroke-width="2"/>
+  <text x="603" y="110" font-size="14" font-weight="700" fill="#20303f" text-anchor="middle">Local SQLite · sync_rows</text>
+  <text x="603" y="132" font-size="11.5" fill="#5f7186" text-anchor="middle">one JSON row per (table, id)</text>
+  <text x="603" y="151" font-size="11.5" fill="#5f7186" text-anchor="middle">server_seq · sync_status · pull cursor</text>
+  <text x="603" y="177" font-size="11" fill="#8595a6" text-anchor="middle" font-style="italic">reads rebuild the views in JS; writes stay "pending"</text>
+
+  <rect x="420" y="238" width="366" height="72" rx="9" fill="#dbeafe" stroke="#1f7ae0"/>
+  <text x="603" y="266" font-size="14" font-weight="700" fill="#20303f" text-anchor="middle">Sync engine · sync/*</text>
+  <text x="603" y="286" font-size="11.5" fill="#3f566c" text-anchor="middle">pullSync · pushSync · syncNow</text>
+  <text x="603" y="302" font-size="11" fill="#3f566c" text-anchor="middle">on launch / foreground / reconnect / after an edit</text>
+
+  <line x1="300" y1="130" x2="416" y2="130" stroke="#5f7186" stroke-width="1.6" marker-start="url(#ah)" marker-end="url(#ah)"/>
+  <text x="358" y="122" font-size="10.5" fill="#3f566c" text-anchor="middle">read / write</text>
+
+  <line x1="603" y1="194" x2="603" y2="234" stroke="#5f7186" stroke-width="1.6" marker-start="url(#ah)" marker-end="url(#ah)"/>
+  <text x="666" y="219" font-size="10.5" fill="#3f566c" text-anchor="middle">pending / acks</text>
+
+  <!-- network -->
+  <line x1="28" y1="344" x2="832" y2="344" stroke="#c0c6cf" stroke-width="1.4" stroke-dasharray="6 5"/>
+  <rect x="398" y="335" width="64" height="18" rx="9" fill="#ffffff"/>
+  <text x="430" y="348" font-size="11" fill="#8595a6" text-anchor="middle">network</text>
+
+  <!-- Server -->
+  <rect x="28" y="360" width="804" height="216" rx="14" fill="#f2f3f5" stroke="#dadde2"/>
+  <text x="50" y="386" font-size="15" font-weight="700" fill="#2c3e52">Server · Hono on Bun</text>
+
+  <rect x="92" y="406" width="286" height="52" rx="9" fill="#ffffff" stroke="#b6c3d4"/>
+  <text x="235" y="437" font-size="13.5" font-weight="600" fill="#20303f" text-anchor="middle">POST /sync/push</text>
+
+  <rect x="486" y="406" width="286" height="52" rx="9" fill="#ffffff" stroke="#b6c3d4"/>
+  <text x="629" y="437" font-size="13" font-weight="600" fill="#20303f" text-anchor="middle">GET /sync/pull?since=cursor</text>
+
+  <rect x="292" y="494" width="280" height="70" rx="9" fill="#ffffff" stroke="#7a8696"/>
+  <text x="432" y="522" font-size="13.5" font-weight="700" fill="#20303f" text-anchor="middle">Postgres · syncable tables</text>
+  <text x="432" y="542" font-size="11" fill="#5f7186" text-anchor="middle">server_seq via sequence + BEFORE UPDATE trigger</text>
+
+  <!-- push: sync engine -> push endpoint -->
+  <line x1="470" y1="310" x2="240" y2="402" stroke="#1f7ae0" stroke-width="1.8" marker-end="url(#ab)"/>
+  <rect x="252" y="352" width="112" height="18" rx="5" fill="#ffffff"/>
+  <text x="308" y="365" font-size="11" fill="#1f7ae0" font-weight="600" text-anchor="middle">push (pending)</text>
+
+  <!-- pull: pull endpoint -> sync engine -->
+  <line x1="629" y1="402" x2="735" y2="310" stroke="#2f9e6f" stroke-width="1.8" marker-end="url(#at)"/>
+  <rect x="616" y="352" width="128" height="18" rx="5" fill="#ffffff"/>
+  <text x="680" y="365" font-size="11" fill="#2f9e6f" font-weight="600" text-anchor="middle">pull (since cursor)</text>
+
+  <!-- push endpoint -> Postgres -->
+  <line x1="268" y1="458" x2="356" y2="494" stroke="#5f7186" stroke-width="1.5" marker-end="url(#ah)"/>
+  <text x="284" y="482" font-size="10.5" fill="#3f566c" text-anchor="middle">upsert (LWW)</text>
+
+  <!-- Postgres -> pull endpoint -->
+  <line x1="540" y1="494" x2="624" y2="458" stroke="#5f7186" stroke-width="1.5" marker-end="url(#ah)"/>
+  <text x="590" y="482" font-size="10.5" fill="#3f566c" text-anchor="middle">rows above cursor</text>
+</svg>
