@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link } from "expo-router";
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ArrowRight01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react-native";
 
@@ -28,13 +29,14 @@ const FILTER_NOUN: Record<Exclude<Filter, "all">, string> = { open: "open", comp
 export default function VisitsListScreen() {
   const { data: visits, isPending, isError, refetch, isRefetching } = useVisits();
   const theme = useTheme();
+  const insets = useSafeAreaInsets();
   const [filter, setFilter] = useState<Filter>("all");
 
   const shown = (visits ?? []).filter((visit) => filter === "all" || visit.status === filter);
 
   return (
     <ThemedView style={styles.container}>
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + Spacing.two }]}>
         <View style={styles.headerTitle}>
           <ThemedText type="subtitle">Today</ThemedText>
           <ThemedText themeColor="textSecondary">{formatToday()}</ThemedText>
@@ -103,7 +105,6 @@ const styles = StyleSheet.create({
   },
   header: {
     paddingHorizontal: Spacing.three,
-    paddingTop: Spacing.three,
     paddingBottom: Spacing.two,
     gap: Spacing.three,
   },

@@ -17,7 +17,7 @@ function DoneButton() {
 export default function VisitsStackLayout() {
   return (
     <Stack>
-      <Stack.Screen name="index" options={{ title: "Visits" }} />
+      <Stack.Screen name="index" options={{ headerShown: false }} />
       <Stack.Screen
         name="[id]/index"
         options={{ title: "Visit", headerBackButtonDisplayMode: "minimal" }}

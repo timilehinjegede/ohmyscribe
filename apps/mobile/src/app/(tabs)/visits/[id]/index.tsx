@@ -55,7 +55,9 @@ export default function VisitDetailScreen() {
   return (
     <ThemedView style={styles.container}>
       <ScrollView contentContainerStyle={styles.content}>
-        <ThemedText type="subtitle">{visit.patient?.name ?? "Unknown patient"}</ThemedText>
+        <ThemedText type="subtitle" style={styles.patientName}>
+          {visit.patient?.name ?? "Unknown patient"}
+        </ThemedText>
         <View style={styles.meta}>
           <MetaRow label="Type" value={visit.type} />
           <MetaRow label="Status" value={titleCase(visit.status)} />
@@ -107,6 +109,10 @@ const styles = StyleSheet.create({
     padding: Spacing.three,
     gap: Spacing.two,
     paddingBottom: BottomTabInset + Spacing.three,
+  },
+  patientName: {
+    fontSize: 24,
+    lineHeight: 30,
   },
   meta: {
     gap: Spacing.half,
