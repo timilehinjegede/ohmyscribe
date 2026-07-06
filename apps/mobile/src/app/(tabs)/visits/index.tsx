@@ -15,7 +15,9 @@ import { ThemedView } from "@/components/themed-view";
 import { BottomTabInset, Spacing } from "@/constants/theme";
 import { useVisits } from "@/data/visits";
 import { useTheme } from "@/hooks/use-theme";
+import { atLeast } from "@/lib/async";
 import { formatToday } from "@/lib/format";
+import { syncNow } from "@/sync";
 
 // "all" matches every status; the others match the visit `status` directly.
 const FILTERS = [
@@ -27,10 +29,18 @@ type Filter = (typeof FILTERS)[number][0];
 const FILTER_NOUN: Record<Exclude<Filter, "all">, string> = { open: "open", complete: "completed" };
 
 export default function VisitsListScreen() {
-  const { data: visits, isPending, isError, refetch, isRefetching } = useVisits();
+  const { data: visits, isPending, isError, refetch } = useVisits();
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const [filter, setFilter] = useState<Filter>("all");
+  const [refreshing, setRefreshing] = useState(false);
+
+  // Pull-to-refresh must reach the server because useVisits only reads local SQLite.
+  const onSync = async () => {
+    setRefreshing(true);
+    await atLeast(600, syncNow());
+    setRefreshing(false);
+  };
 
   const shown = (visits ?? []).filter((visit) => filter === "all" || visit.status === filter);
 
@@ -48,8 +58,8 @@ export default function VisitsListScreen() {
         style={styles.list}
         keyExtractor={(visit) => visit.id}
         contentContainerStyle={styles.listContent}
-        refreshing={isRefetching}
-        onRefresh={() => refetch()}
+        refreshing={refreshing}
+        onRefresh={onSync}
         ListEmptyComponent={
           <ThemedView style={styles.message}>
             {isPending ? (

@@ -7,3 +7,4 @@ export * from "./visit.ts";
 export * from "./oasis/index.ts";
 export * from "./assessment.ts";
 export * from "./pdgm/index.ts";
+export * from "./sync.ts";

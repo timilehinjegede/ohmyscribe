@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import {
   answerSuggestions,
   assessmentAnswers,
@@ -21,6 +21,7 @@ import { db } from "./db.ts";
 import { extractAnswers } from "./answer-suggestions.ts";
 import { getAssessment } from "./assessments.ts";
 import { selectPicks, suggestCoding } from "./diagnosis-suggestions.ts";
+import { pull, push } from "./sync.ts";
 import server from "./index.ts";
 
 // Integration tests: they hit the real Postgres (DATABASE_URL must be set) via the
@@ -630,4 +631,193 @@ test("PATCH /assessments/:id/codings -> 409 once complete, leaving codings uncha
     .array(codedDiagnosisSchema)
     .parse(await (await get(`/assessments/${assessmentId}/diagnoses`)).json());
   expect(coded.find((d) => d.diagnosisId === asthmaId)?.coding?.isPrimary).toBe(true);
+});
+
+test("sync push: new applies, a newer edit wins, a stale edit no-ops (LWW)", async () => {
+  const id = crypto.randomUUID();
+  const t0 = new Date(Date.now() - 3000).toISOString();
+  const t1 = new Date(Date.now() - 2000).toISOString();
+  const t2 = new Date(Date.now() - 1000).toISOString();
+  const row = (updatedAt: string, value: string) => ({
+    table: "assessment_answers" as const,
+    id,
+    updatedAt,
+    deletedAt: null,
+    assessmentId,
+    itemCode: "SYNC_TEST",
+    value,
+  });
+
+  expect((await push(db, [row(t1, "1")]))[0]?.status).toBe("applied");
+  expect((await push(db, [row(t2, "3")]))[0]?.status).toBe("applied"); // newer wins
+  expect((await push(db, [row(t0, "0")]))[0]?.status).toBe("stale"); // older no-ops
+
+  const [stored] = await db
+    .select({ value: assessmentAnswers.value })
+    .from(assessmentAnswers)
+    .where(eq(assessmentAnswers.id, id));
+  expect(stored?.value).toBe("3");
+});
+
+test("sync push stamps a serverSeq the pull cursor picks up", async () => {
+  const { cursor: before } = await pull(db, 0);
+  const id = crypto.randomUUID();
+  const applied = await push(db, [
+    {
+      table: "assessment_answers" as const,
+      id,
+      updatedAt: new Date().toISOString(),
+      deletedAt: null,
+      assessmentId,
+      itemCode: "SYNC_TEST_2",
+      value: "2",
+    },
+  ]);
+  expect(applied[0]?.status).toBe("applied");
+
+  const { changes, cursor } = await pull(db, before);
+  expect(cursor).toBeGreaterThan(before);
+  expect((changes.assessment_answers as { id: string }[]).some((a) => a.id === id)).toBe(true);
+});
+
+test("POST /sync/push -> 400 rejects a pull-only table", async () => {
+  const res = await postJson("/sync/push", {
+    rows: [
+      {
+        table: "visits",
+        id: crypto.randomUUID(),
+        updatedAt: new Date().toISOString(),
+        deletedAt: null,
+      },
+    ],
+  });
+  expect(res.status).toBe(400);
+});
+
+test("sync push: an idempotent re-push acks applied with the serverSeq, not stale", async () => {
+  const row = {
+    table: "assessment_answers" as const,
+    id: crypto.randomUUID(),
+    updatedAt: new Date().toISOString(),
+    deletedAt: null,
+    assessmentId,
+    itemCode: "SYNC_IDEM",
+    value: "1",
+  };
+  const first = await push(db, [row]);
+  expect(first[0]?.status).toBe("applied");
+  // A lost-ack retry re-pushes the same version: it must ack applied + the same serverSeq, or the
+  // client can never clear pending (the version-guarded ack needs the seq).
+  expect(await push(db, [row])).toEqual(first);
+});
+
+test("sync push: a natural-key collision rejects that row but the batch survives", async () => {
+  // an answer created the REST way (server-generated id) for the same (assessment, item)
+  await db
+    .insert(assessmentAnswers)
+    .values({ assessmentId, itemCode: "SYNC_COLLIDE", value: "5", updatedAt: new Date() });
+  const collide = {
+    table: "assessment_answers" as const,
+    id: crypto.randomUUID(),
+    updatedAt: new Date().toISOString(),
+    deletedAt: null,
+    assessmentId,
+    itemCode: "SYNC_COLLIDE",
+    value: "9",
+  };
+  const ok = { ...collide, id: crypto.randomUUID(), itemCode: "SYNC_OK", value: "2" };
+  const [r1, r2] = await push(db, [collide, ok]);
+  expect(r1?.status).toBe("rejected");
+  expect(r2?.status).toBe("applied"); // the sibling still went through
+});
+
+test("sync push: a stale edit can't revive a tombstone, but a newer re-add can", async () => {
+  const id = crypto.randomUUID();
+  const at = (updatedAt: string, deletedAt: string | null) => ({
+    table: "assessment_answers" as const,
+    id,
+    updatedAt,
+    deletedAt,
+    assessmentId,
+    itemCode: "SYNC_DEL",
+    value: "1",
+  });
+  const created = new Date(Date.now() - 3000).toISOString();
+  const deleted = new Date(Date.now() - 1000).toISOString();
+  const stale = new Date(Date.now() - 2000).toISOString(); // older than the delete
+  const readd = new Date().toISOString(); // newer than the delete
+
+  await push(db, [at(created, null)]);
+  await push(db, [at(deleted, deleted)]);
+  await push(db, [at(stale, null)]); // stale un-delete, gated out, must not resurrect
+  const [afterStale] = await db
+    .select({ deletedAt: assessmentAnswers.deletedAt })
+    .from(assessmentAnswers)
+    .where(eq(assessmentAnswers.id, id));
+  expect(afterStale?.deletedAt).not.toBeNull();
+
+  await push(db, [at(readd, null)]); // newer re-add, revives (the legitimate case)
+  const [afterReadd] = await db
+    .select({ deletedAt: assessmentAnswers.deletedAt })
+    .from(assessmentAnswers)
+    .where(eq(assessmentAnswers.id, id));
+  expect(afterReadd?.deletedAt).toBeNull();
+});
+
+test("sync push: a new primary coding demotes the old one (no one-primary collision)", async () => {
+  const [p] = await db
+    .insert(patients)
+    .values({ name: "Sync Test", dob: "1950-01-01", source: "test" })
+    .returning({ id: patients.id });
+  const [v] = await db
+    .insert(visits)
+    .values({ patientId: p!.id, type: "SOC", status: "open" })
+    .returning({ id: visits.id });
+  const dx = async (code: string) =>
+    (
+      await db
+        .insert(diagnoses)
+        .values({ visitId: v!.id, system: "http://snomed.info/sct", code, display: code })
+        .returning({ id: diagnoses.id })
+    )[0]!.id;
+  const d1 = await dx("59621000");
+  const d2 = await dx("195967001");
+  const [a] = await db
+    .insert(assessments)
+    .values({ visitId: v!.id, updatedAt: new Date() })
+    .returning({ id: assessments.id });
+
+  const coding = (updatedAt: string, diagnosisId: string) => ({
+    table: "diagnosis_codings" as const,
+    id: crypto.randomUUID(),
+    updatedAt,
+    deletedAt: null,
+    assessmentId: a!.id,
+    diagnosisId,
+    icd10Code: "I10",
+    isPrimary: true,
+  });
+  expect((await push(db, [coding(new Date(Date.now() - 1000).toISOString(), d1)]))[0]?.status).toBe(
+    "applied",
+  );
+  expect((await push(db, [coding(new Date().toISOString(), d2)]))[0]?.status).toBe("applied");
+
+  const live = await db
+    .select({ diagnosisId: diagnosisCodings.diagnosisId })
+    .from(diagnosisCodings)
+    .where(
+      and(
+        eq(diagnosisCodings.assessmentId, a!.id),
+        eq(diagnosisCodings.isPrimary, true),
+        isNull(diagnosisCodings.deletedAt),
+      ),
+    );
+  expect(live.length).toBe(1); // the partial one-primary index held
+  expect(live[0]?.diagnosisId).toBe(d2); // the new primary won; the old was demoted
+
+  await db.delete(diagnosisCodings).where(eq(diagnosisCodings.assessmentId, a!.id));
+  await db.delete(assessments).where(eq(assessments.id, a!.id));
+  await db.delete(diagnoses).where(eq(diagnoses.visitId, v!.id));
+  await db.delete(visits).where(eq(visits.id, v!.id));
+  await db.delete(patients).where(eq(patients.id, p!.id));
 });

@@ -31,7 +31,7 @@ export function ReviewStep({
       <View style={styles.centered}>
         <ActivityIndicator />
         <ThemedText type="small" themeColor="textSecondary">
-          Transcribing the visit…
+          Transcribing the visit...
         </ThemedText>
       </View>
     );
@@ -62,10 +62,12 @@ export function ReviewStep({
             ) : null}
             <View style={styles.reviewRow}>
               <ThemedText type="small" themeColor="textSecondary">
-                You: {getOasisResponseLabel(suggestion.itemCode, current) ?? current ?? "not answered"}
+                You:{" "}
+                {getOasisResponseLabel(suggestion.itemCode, current) ?? current ?? "not answered"}
               </ThemedText>
               <ThemedText type="small">
-                AI: {getOasisResponseLabel(suggestion.itemCode, suggestion.value) ?? suggestion.value}
+                AI:{" "}
+                {getOasisResponseLabel(suggestion.itemCode, suggestion.value) ?? suggestion.value}
               </ThemedText>
             </View>
             {isComplete ? null : matches ? (
