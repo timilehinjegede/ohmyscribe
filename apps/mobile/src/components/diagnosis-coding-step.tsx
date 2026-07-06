@@ -198,17 +198,26 @@ function AiDraft({
         <ThemedText type="smallBold">AI draft</ThemedText>
       </View>
       {primary ? (
-        <ThemedText type="small">
-          Primary: {shortName(primary)}
-          {primary.suggestion?.rationale ? `, ${primary.suggestion.rationale}` : ""}
-        </ThemedText>
+        <View style={styles.draftGroup}>
+          <ThemedText type="small" themeColor="textSecondary">
+            Primary
+          </ThemedText>
+          <ThemedText type="small">
+            {shortName(primary)}
+            {primary.suggestion?.rationale ? `: ${primary.suggestion.rationale}` : ""}
+          </ThemedText>
+        </View>
       ) : null}
       {secondaries.length > 0 ? (
-        <ThemedText type="small" themeColor="textSecondary">
-          Also suggests: {secondaries.map(shortName).join(", ")}
-        </ThemedText>
+        <View style={styles.draftGroup}>
+          <ThemedText type="small" themeColor="textSecondary">
+            Other diagnoses
+          </ThemedText>
+          <ThemedText type="small">{secondaries.map(shortName).join(", ")}</ThemedText>
+        </View>
       ) : null}
-      <Pressable onPress={onAccept} disabled={busy} hitSlop={8}>
+      <Pressable onPress={onAccept} disabled={busy} hitSlop={8} style={styles.draftAccept}>
+        <HugeiconsIcon icon={SparklesIcon} size={16} color={theme.accent} />
         <ThemedText type="linkPrimary">{busy ? "Applying…" : "Accept draft"}</ThemedText>
       </Pressable>
     </View>
@@ -322,6 +331,15 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: Spacing.one,
+  },
+  draftGroup: {
+    gap: Spacing.half,
+  },
+  draftAccept: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.one,
+    marginTop: Spacing.half,
   },
   suggestions: { gap: Spacing.one, marginTop: Spacing.one },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: Spacing.two },
