@@ -18,9 +18,9 @@ export default function TabsLayout() {
         <NativeTabs.Trigger.Icon sf="list.bullet" md="list" />
       </NativeTabs.Trigger>
 
-      <NativeTabs.Trigger name="profile">
-        <NativeTabs.Trigger.Label>Profile</NativeTabs.Trigger.Label>
-        <NativeTabs.Trigger.Icon sf="person.crop.circle" md="person" />
+      <NativeTabs.Trigger name="sync">
+        <NativeTabs.Trigger.Label>Sync</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon sf="arrow.triangle.2.circlepath" md="sync" />
       </NativeTabs.Trigger>
     </NativeTabs>
   );
