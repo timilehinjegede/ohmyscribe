@@ -1,17 +1,21 @@
-import { useState, type ReactNode } from "react";
+import { type ReactNode } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, View } from "react-native";
 import {
   getOasisItem,
   type AdmissionSource,
   type ComorbidityLevel,
   type FunctionalLevel,
+  type PdgmResult,
   type Timing,
 } from "@ohmyscribe/shared";
+import type { UseQueryResult } from "@tanstack/react-query";
 
+import { Badge } from "@/components/badge";
+import { Card } from "@/components/card";
+import { SegmentedControl } from "@/components/segmented-control";
 import { ThemedText } from "@/components/themed-text";
-import { ThemedView } from "@/components/themed-view";
 import { Spacing } from "@/constants/theme";
-import { usePdgm } from "@/data/pdgm";
+import { useTheme } from "@/hooks/use-theme";
 
 const FUNCTIONAL_LABEL: Record<FunctionalLevel, string> = {
   low: "Low",
@@ -30,19 +34,21 @@ const ADMISSION_LABEL: Record<AdmissionSource, string> = {
 };
 
 export function CodingStep({
-  assessmentId,
   isComplete,
-  onFinalize,
-  finalizing,
+  timing,
+  admission,
+  onTimingChange,
+  onAdmissionChange,
+  pdgm,
 }: {
-  assessmentId: string;
   isComplete: boolean;
-  onFinalize: (timing: Timing, admissionSource: AdmissionSource) => void;
-  finalizing: boolean;
+  timing: Timing;
+  admission: AdmissionSource;
+  onTimingChange: (timing: Timing) => void;
+  onAdmissionChange: (admissionSource: AdmissionSource) => void;
+  pdgm: UseQueryResult<PdgmResult>;
 }) {
-  const [timing, setTiming] = useState<Timing>("early");
-  const [admission, setAdmission] = useState<AdmissionSource>("community");
-  const pdgm = usePdgm(assessmentId, timing, admission);
+  const theme = useTheme();
 
   if (pdgm.isPending) {
     return (
@@ -65,20 +71,18 @@ export function CodingStep({
 
   return (
     <View style={styles.group}>
-      <ThemedView type="backgroundElement" style={styles.payment}>
-        {isComplete ? (
-          <ThemedText type="small" themeColor="textSecondary">
-            ✓ Filed
-          </ThemedText>
-        ) : null}
+      <Card style={styles.payment}>
+        {isComplete ? <Badge label="Filed" tone="success" /> : null}
         <ThemedText type="small" themeColor="textSecondary">
           Estimated 30-day payment
         </ThemedText>
-        <ThemedText type="subtitle">${result.estimatedPayment.toLocaleString()}</ThemedText>
+        <ThemedText type="subtitle" style={{ color: theme.accent }}>
+          ${result.estimatedPayment.toLocaleString()}
+        </ThemedText>
         <ThemedText type="small" themeColor="textSecondary">
           Illustrative · case-mix weight {result.caseMixWeight}
         </ThemedText>
-      </ThemedView>
+      </Card>
 
       {isComplete ? (
         <>
@@ -94,7 +98,7 @@ export function CodingStep({
               ["early", "Early"],
               ["late", "Late"],
             ]}
-            onChange={(value) => setTiming(value as Timing)}
+            onChange={(value) => onTimingChange(value as Timing)}
           />
           <Toggle
             label="Admission source"
@@ -103,7 +107,7 @@ export function CodingStep({
               ["community", "Community"],
               ["institutional", "Institutional"],
             ]}
-            onChange={(value) => setAdmission(value as AdmissionSource)}
+            onChange={(value) => onAdmissionChange(value as AdmissionSource)}
           />
         </>
       )}
@@ -133,30 +137,15 @@ export function CodingStep({
       />
 
       <ThemedText type="small" themeColor="textSecondary">
-        Illustrative PDGM — real algorithm; clinical-group map scoped to our fixtures; points,
+        Illustrative PDGM: real algorithm; clinical-group map scoped to our fixtures; points,
         thresholds, and weights are illustrative pending the CMS final rule.
       </ThemedText>
 
-      {isComplete ? null : (
-        <>
-          {result.clinicalGroupDriver ? null : (
-            <ThemedText type="small" themeColor="textSecondary">
-              Code a primary diagnosis to file.
-            </ThemedText>
-          )}
-          <Pressable
-            onPress={() => onFinalize(timing, admission)}
-            disabled={finalizing || !result.clinicalGroupDriver}
-          >
-            <ThemedView
-              type={result.clinicalGroupDriver ? "backgroundSelected" : "background"}
-              style={styles.finalize}
-            >
-              <ThemedText type="smallBold">{finalizing ? "Filing…" : "Finalize & file"}</ThemedText>
-            </ThemedView>
-          </Pressable>
-        </>
-      )}
+      {!isComplete && !result.clinicalGroupDriver ? (
+        <ThemedText type="small" themeColor="textSecondary">
+          Code a primary diagnosis to file, then Complete visit.
+        </ThemedText>
+      ) : null}
     </View>
   );
 }
@@ -169,7 +158,7 @@ function Toggle({
 }: {
   label: string;
   value: string;
-  options: [string, string][];
+  options: readonly (readonly [string, string])[];
   onChange: (value: string) => void;
 }) {
   return (
@@ -177,18 +166,7 @@ function Toggle({
       <ThemedText type="small" themeColor="textSecondary">
         {label}
       </ThemedText>
-      <View style={styles.toggleOptions}>
-        {options.map(([optionValue, optionLabel]) => (
-          <Pressable key={optionValue} onPress={() => onChange(optionValue)} hitSlop={8}>
-            <ThemedView
-              type={optionValue === value ? "backgroundSelected" : "background"}
-              style={styles.toggleOption}
-            >
-              <ThemedText type="small">{optionLabel}</ThemedText>
-            </ThemedView>
-          </Pressable>
-        ))}
-      </View>
+      <SegmentedControl options={options} value={value} onChange={onChange} />
     </View>
   );
 }
@@ -216,7 +194,7 @@ function Dimension({
   children?: ReactNode;
 }) {
   return (
-    <ThemedView type="backgroundElement" style={styles.dimension}>
+    <Card style={styles.dimension}>
       <ThemedText type="small" themeColor="textSecondary">
         {label}
       </ThemedText>
@@ -227,7 +205,7 @@ function Dimension({
         </ThemedText>
       ) : null}
       {children}
-    </ThemedView>
+    </Card>
   );
 }
 
@@ -242,8 +220,6 @@ const styles = StyleSheet.create({
     gap: Spacing.two,
   },
   payment: {
-    padding: Spacing.three,
-    borderRadius: Spacing.two,
     gap: Spacing.one,
     alignItems: "center",
   },
@@ -253,24 +229,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     gap: Spacing.two,
   },
-  toggleOptions: {
-    flexDirection: "row",
-    gap: Spacing.one,
-  },
-  toggleOption: {
-    paddingVertical: Spacing.one,
-    paddingHorizontal: Spacing.two,
-    borderRadius: Spacing.one,
-  },
   dimension: {
-    padding: Spacing.three,
-    borderRadius: Spacing.two,
     gap: Spacing.one,
-  },
-  finalize: {
-    padding: Spacing.three,
-    borderRadius: Spacing.two,
-    alignItems: "center",
-    marginTop: Spacing.one,
   },
 });

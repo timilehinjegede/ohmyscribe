@@ -1,5 +1,5 @@
 import { Stack, useRouter } from "expo-router";
-import { Pressable } from "react-native";
+import { Pressable, StyleSheet } from "react-native";
 
 import { ThemedText } from "@/components/themed-text";
 
@@ -7,7 +7,9 @@ function DoneButton() {
   const router = useRouter();
   return (
     <Pressable onPress={() => router.back()} hitSlop={8}>
-      <ThemedText type="linkPrimary">Done</ThemedText>
+      <ThemedText type="default" themeColor="accent" style={styles.done}>
+        Done
+      </ThemedText>
     </Pressable>
   );
 }
@@ -27,3 +29,9 @@ export default function VisitsStackLayout() {
     </Stack>
   );
 }
+
+const styles = StyleSheet.create({
+  done: {
+    fontWeight: "600",
+  },
+});

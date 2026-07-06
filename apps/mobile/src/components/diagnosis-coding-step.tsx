@@ -5,7 +5,7 @@ import { HugeiconsIcon } from "@hugeicons/react-native";
 import type { CodedDiagnosis } from "@ohmyscribe/shared";
 
 import { ThemedText } from "@/components/themed-text";
-import { Spacing } from "@/constants/theme";
+import { Radius, Spacing } from "@/constants/theme";
 import {
   useCodedDiagnoses,
   useRemoveCoding,
@@ -63,7 +63,7 @@ export function DiagnosisCodingStep({
   const aiSecondaries = coded.data.filter(
     (diagnosis) => diagnosis.suggestion && !diagnosis.suggestion.isPrimary,
   );
-  // Starting-point draft — dismissed by the first coding; the AI-marked chips carry the rest.
+  // Starting-point draft, dismissed by the first coding; the AI-marked chips carry the rest.
   const nothingCoded = !primary && secondaries.length === 0;
   const showDraft = !isComplete && nothingCoded && (aiPrimary !== null || aiSecondaries.length > 0);
 
@@ -161,7 +161,7 @@ export function DiagnosisCodingStep({
         )}
         {!isComplete && unassigned.length > 0 ? (
           <Suggestions
-            label={atCap ? `Max ${MAX_SECONDARY} — remove one to add another` : "Add"}
+            label={atCap ? `Max ${MAX_SECONDARY}, remove one to add another` : "Add"}
             diagnoses={unassigned}
             disabled={atCap}
             aiRole="secondary"
@@ -171,8 +171,8 @@ export function DiagnosisCodingStep({
       </View>
 
       {saveCoding.isError || removeCoding.isError ? (
-        <ThemedText type="small" themeColor="textSecondary">
-          Could not save — check your connection.
+        <ThemedText type="small" themeColor="danger">
+          Could not save. Check your connection.
         </ThemedText>
       ) : null}
     </View>
@@ -200,7 +200,7 @@ function AiDraft({
       {primary ? (
         <ThemedText type="small">
           Primary: {shortName(primary)}
-          {primary.suggestion?.rationale ? ` — ${primary.suggestion.rationale}` : ""}
+          {primary.suggestion?.rationale ? `, ${primary.suggestion.rationale}` : ""}
         </ThemedText>
       ) : null}
       {secondaries.length > 0 ? (
@@ -296,13 +296,13 @@ function AssignedChip({
 }) {
   const theme = useTheme();
   return (
-    <View style={[styles.chip, styles.chipFilled, { backgroundColor: theme.backgroundSelected }]}>
-      <ThemedText type="small">
+    <View style={[styles.chip, styles.chipFilled, { backgroundColor: theme.accentMuted }]}>
+      <ThemedText type="small" style={{ color: theme.accent }}>
         {shortName(diagnosis)} · {diagnosis.coding?.icd10Code}
       </ThemedText>
       {isComplete ? null : (
         <Pressable onPress={onRemove} hitSlop={8}>
-          <HugeiconsIcon icon={Cancel01Icon} size={14} color={theme.textSecondary} />
+          <HugeiconsIcon icon={Cancel01Icon} size={14} color={theme.accent} />
         </Pressable>
       )}
     </View>
@@ -315,7 +315,7 @@ const styles = StyleSheet.create({
   draft: {
     gap: Spacing.one,
     padding: Spacing.three,
-    borderRadius: Spacing.two,
+    borderRadius: Radius.md,
     borderWidth: 1,
   },
   draftHeader: {
@@ -331,7 +331,7 @@ const styles = StyleSheet.create({
     gap: Spacing.two,
     paddingVertical: Spacing.one,
     paddingHorizontal: Spacing.two,
-    borderRadius: Spacing.four,
+    borderRadius: Radius.pill,
     borderWidth: 1,
   },
   chipFilled: { borderColor: "transparent" },

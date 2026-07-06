@@ -62,7 +62,7 @@ export function useSaveAnswer(visitId: string, assessmentId: string) {
     },
     onError: (error, _answer, context) => {
       if (context?.previous) queryClient.setQueryData(queryKey, context.previous);
-      // A 409 means it was completed elsewhere — refetch so the wizard flips to read-only.
+      // A 409 means it was completed elsewhere; refetch so the wizard flips to read-only.
       if (error instanceof HttpError && error.status === 409) {
         queryClient.invalidateQueries({ queryKey });
       }
