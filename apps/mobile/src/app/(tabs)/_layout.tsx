@@ -10,7 +10,8 @@ export default function TabsLayout() {
     <NativeTabs
       backgroundColor={colors.background}
       indicatorColor={colors.backgroundElement}
-      labelStyle={{ selected: { color: colors.text } }}
+      tintColor={colors.accent}
+      labelStyle={{ selected: { color: colors.accent } }}
     >
       <NativeTabs.Trigger name="visits">
         <NativeTabs.Trigger.Label>Visits</NativeTabs.Trigger.Label>
