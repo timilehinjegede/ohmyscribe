@@ -172,7 +172,7 @@ export function DiagnosisCodingStep({
 
       {saveCoding.isError || removeCoding.isError ? (
         <ThemedText type="small" themeColor="danger">
-          Could not save. Check your connection.
+          Could not save, please try again.
         </ThemedText>
       ) : null}
     </View>
@@ -218,7 +218,7 @@ function AiDraft({
       ) : null}
       <Pressable onPress={onAccept} disabled={busy} hitSlop={8} style={styles.draftAccept}>
         <HugeiconsIcon icon={SparklesIcon} size={16} color={theme.accent} />
-        <ThemedText type="linkPrimary">{busy ? "Applying…" : "Accept draft"}</ThemedText>
+        <ThemedText type="linkPrimary">{busy ? "Applying..." : "Accept draft"}</ThemedText>
       </Pressable>
     </View>
   );

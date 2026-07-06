@@ -171,7 +171,12 @@ export default function AssessmentWizard() {
         <ThemedText type="subtitle">{STEP_TITLES[step]}</ThemedText>
         {saveAnswer.isError ? (
           <ThemedText type="small" style={{ color: theme.danger }}>
-            Could not save. Check your connection.
+            Could not save, please try again.
+          </ThemedText>
+        ) : null}
+        {completeAssessment.isError ? (
+          <ThemedText type="small" style={{ color: theme.danger }}>
+            Could not file, please reconnect and try again.
           </ThemedText>
         ) : null}
       </View>
@@ -244,7 +249,7 @@ export default function AssessmentWizard() {
           />
         ) : onLastScaleStep && !isComplete ? (
           <Button
-            title={extractAudio.isPending ? "Transcribing…" : "Finish"}
+            title={extractAudio.isPending ? "Transcribing..." : "Finish"}
             size="compact"
             loading={extractAudio.isPending}
             onPress={() => void finish()}
