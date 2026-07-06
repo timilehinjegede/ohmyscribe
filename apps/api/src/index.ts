@@ -6,6 +6,8 @@ import {
   TIMINGS,
   completeRequestSchema,
   extractRequestSchema,
+  syncPullQuerySchema,
+  syncPushRequestSchema,
   upsertAnswersSchema,
   upsertCodingSchema,
 } from "@ohmyscribe/shared";
@@ -19,6 +21,7 @@ import { extractAnswers } from "./answer-suggestions.ts";
 import { getCodedDiagnoses, removeCoding, upsertCoding } from "./diagnosis-codings.ts";
 import { suggestCoding } from "./diagnosis-suggestions.ts";
 import { computeAssessmentPdgm } from "./pdgm.ts";
+import { pull, push } from "./sync.ts";
 import { callCodingModel, callExtractModel, transcribeAudio } from "./openai.ts";
 import { db } from "./db.ts";
 import { getVisit, listVisits } from "./visits.ts";
@@ -34,6 +37,28 @@ app.onError((err, c) => {
 app.get("/health", (c) => c.json({ ok: true }));
 
 app.get("/visits", async (c) => c.json(await listVisits(db)));
+
+app.get(
+  "/sync/pull",
+  zValidator("query", syncPullQuerySchema, (result, c) => {
+    if (!result.success) return c.json({ error: "invalid cursor" }, 400);
+  }),
+  async (c) => {
+    const { since } = c.req.valid("query");
+    return c.json(await pull(db, since));
+  },
+);
+
+app.post(
+  "/sync/push",
+  zValidator("json", syncPushRequestSchema, (result, c) => {
+    if (!result.success) return c.json({ error: "invalid push" }, 400);
+  }),
+  async (c) => {
+    const { rows } = c.req.valid("json");
+    return c.json({ results: await push(db, rows) });
+  },
+);
 
 app.get(
   "/visits/:id",
