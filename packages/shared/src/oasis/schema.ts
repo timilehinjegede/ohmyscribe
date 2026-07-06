@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { getOasisItem, OASIS_ITEMS, type OasisItemCode } from "./catalog.ts";
+import { getOasisResponse, OASIS_ITEMS, type OasisItemCode } from "./catalog.ts";
 
 // z.enum needs a literal tuple; deriving it from the catalog keeps codes from drifting.
 export const oasisItemCodeSchema = z.enum(
@@ -14,11 +14,8 @@ export const oasisAnswerSchema = z
     itemCode: oasisItemCodeSchema,
     value: z.string().min(1),
   })
-  .refine(
-    (answer) => getOasisItem(answer.itemCode)?.responses.some((r) => r.value === answer.value),
-    {
-      message: "value is not a valid response for this item",
-      path: ["value"],
-    },
-  );
+  .refine((answer) => getOasisResponse(answer.itemCode, answer.value) !== undefined, {
+    message: "value is not a valid response for this item",
+    path: ["value"],
+  });
 export type OasisAnswer = z.infer<typeof oasisAnswerSchema>;

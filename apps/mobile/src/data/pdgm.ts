@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import type { AdmissionSource, PdgmResult, Timing } from "@ohmyscribe/shared";
 
 import { API_URL } from "@/config";
@@ -16,10 +16,16 @@ async function fetchPdgm(
   return (await res.json()) as PdgmResult;
 }
 
-export function usePdgm(assessmentId: string, timing: Timing, admissionSource: AdmissionSource) {
+export function usePdgm(
+  assessmentId: string,
+  timing: Timing,
+  admissionSource: AdmissionSource,
+  options?: { enabled?: boolean },
+) {
   return useQuery({
     queryKey: ["pdgm", assessmentId, timing, admissionSource],
     queryFn: () => fetchPdgm(assessmentId, timing, admissionSource),
-    enabled: Boolean(assessmentId),
+    enabled: Boolean(assessmentId) && (options?.enabled ?? true),
+    placeholderData: keepPreviousData,
   });
 }

@@ -1,4 +1,4 @@
-import type { OasisItem, OasisSection } from "./types.ts";
+import type { OasisItem, OasisResponse, OasisSection } from "./types.ts";
 
 // Curated subset of OASIS-E items. The value codes match OASIS; the response labels
 // are condensed from the official wording so they fit a mobile picker.
@@ -195,6 +195,20 @@ const itemsByCode = new Map<string, OasisItem>(OASIS_ITEMS.map((item) => [item.c
 
 export function getOasisItem(code: string): OasisItem | undefined {
   return itemsByCode.get(code);
+}
+
+// The response an item value maps to (undefined for an unknown item, value, or no value).
+export function getOasisResponse(
+  code: string,
+  value: string | undefined,
+): OasisResponse | undefined {
+  if (value === undefined) return undefined;
+  return getOasisItem(code)?.responses.find((response) => response.value === value);
+}
+
+// The human-readable label for an item value (undefined when the value isn't a known response).
+export function getOasisResponseLabel(code: string, value: string | undefined): string | undefined {
+  return getOasisResponse(code, value)?.label;
 }
 
 export const oasisItemsBySection = {

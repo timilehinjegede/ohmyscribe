@@ -1,6 +1,7 @@
 import { useLocalSearchParams } from "expo-router";
 import { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from "react-native";
+import { ActivityIndicator, Animated, Pressable, ScrollView, StyleSheet, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   RecordingPresets,
   requestRecordingPermissionsAsync,
@@ -9,14 +10,19 @@ import {
   useAudioRecorderState,
 } from "expo-audio";
 import {
-  getOasisItem,
-  oasisItemsBySection,
   oasisSections,
-  type AnswerSuggestion,
+  type AdmissionSource,
+  type OasisSection,
+  type Timing,
 } from "@ohmyscribe/shared";
 
+import { Button } from "@/components/button";
 import { CodingStep } from "@/components/coding-step";
 import { DiagnosisCodingStep } from "@/components/diagnosis-coding-step";
+import { ProgressBar } from "@/components/progress-bar";
+import { RecordingIndicator } from "@/components/recording-indicator";
+import { ReviewStep } from "@/components/review-step";
+import { ScaleStep } from "@/components/scale-step";
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import { Spacing } from "@/constants/theme";
@@ -26,6 +32,9 @@ import {
   useExtractAudio,
   useSaveAnswer,
 } from "@/data/assessment";
+import { usePdgm } from "@/data/pdgm";
+import { useStepSlide } from "@/hooks/use-step-slide";
+import { useTheme } from "@/hooks/use-theme";
 
 // Diagnoses, one step per catalog section, the AI-draft review, then the PDGM coding view.
 const STEPS = ["diagnoses", ...oasisSections, "review", "coding"] as const;
@@ -38,15 +47,11 @@ const STEP_TITLES: Record<(typeof STEPS)[number], string> = {
   coding: "PDGM Coding",
 };
 
-// Response label for an item's value, so the review step shows text, not raw codes.
-const labelFor = (itemCode: string, value: string | undefined) =>
-  value === undefined
-    ? null
-    : (getOasisItem(itemCode)?.responses.find((response) => response.value === value)?.label ??
-      value);
-
 export default function AssessmentWizard() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const theme = useTheme();
+  const insets = useSafeAreaInsets();
+  const { transform, slideIn } = useStepSlide();
   const [stepIndex, setStepIndex] = useState(0);
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const recorderState = useAudioRecorderState(recorder);
@@ -57,6 +62,18 @@ export default function AssessmentWizard() {
   const extractAudio = useExtractAudio(id, assessment.data?.id ?? "");
 
   const isComplete = Boolean(assessment.data?.completedAt);
+
+  // Derived before the early returns so the progress hook below can read them; the AI-draft
+  // review step drops out once the assessment is filed.
+  const steps = STEPS.filter((name) => !(isComplete && name === "review"));
+  const index = Math.min(stepIndex, steps.length - 1);
+  const step = steps[index]!;
+
+  const [timing, setTiming] = useState<Timing>("early");
+  const [admission, setAdmission] = useState<AdmissionSource>("community");
+  const pdgm = usePdgm(assessment.data?.id ?? "", timing, admission, {
+    enabled: step === "coding",
+  });
 
   // Record the visit from the moment the assessment opens; Finish stops + uploads it.
   useEffect(() => {
@@ -71,13 +88,12 @@ export default function AssessmentWizard() {
         await recorder.prepareToRecordAsync();
         recorder.record();
       } catch {
-        // Setup failed (permission / audio mode / prepare) — degrade to manual-only, no draft.
+        // Setup failed (permission / audio mode / prepare); degrade to manual-only, no draft.
       }
     })();
     return () => {
       active = false;
-      // expo-audio releases the recorder (and mic) on unmount, so dismissing mid-visit discards the
-      // take on its own — touching recorder here would hit an already-freed native object.
+      // the recorder (and mic) is released on unmount
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [assessment.data?.id, isComplete]);
@@ -109,16 +125,17 @@ export default function AssessmentWizard() {
     );
   }
 
-  // The AI-draft review is a pre-filing reconciliation; once filed, drop that step.
-  const steps = STEPS.filter((name) => !(isComplete && name === "review"));
-  const index = Math.min(stepIndex, steps.length - 1);
-  const step = steps[index]!;
   const answers = new Map(assessment.data.answers.map((answer) => [answer.itemCode, answer.value]));
   const reviewIndex = steps.indexOf("review");
   const codingIndex = steps.indexOf("coding");
   const onReview = step === "review";
   const onCoding = step === "coding";
   const onLastScaleStep = step === oasisSections[oasisSections.length - 1]; // the mood step
+
+  const goTo = (next: number) => {
+    slideIn(next >= index ? 1 : -1);
+    setStepIndex(next);
+  };
 
   const finish = async () => {
     if (recorder.isRecording) {
@@ -137,186 +154,112 @@ export default function AssessmentWizard() {
         // handled via extractAudio.isError
       }
     }
-    setStepIndex(reviewIndex);
+    goTo(reviewIndex);
   };
 
   return (
     <ThemedView style={styles.container}>
       <View style={styles.header}>
-        <ThemedText type="small" themeColor="textSecondary">
-          Step {index + 1} of {steps.length}
-          {isComplete
-            ? " · Completed (read-only)"
-            : recorderState.isRecording
-              ? " · ● Recording"
-              : ""}
-        </ThemedText>
+        <View style={styles.headerTop}>
+          <ThemedText type="small" themeColor="textSecondary">
+            Step {index + 1} of {steps.length}
+            {isComplete ? " · Completed (read-only)" : ""}
+          </ThemedText>
+          {!isComplete && recorderState.isRecording ? <RecordingIndicator /> : null}
+        </View>
+        <ProgressBar value={(index + 1) / steps.length} />
         <ThemedText type="subtitle">{STEP_TITLES[step]}</ThemedText>
         {saveAnswer.isError ? (
-          <ThemedText type="small" themeColor="textSecondary">
-            Could not save — check your connection.
+          <ThemedText type="small" style={{ color: theme.danger }}>
+            Could not save. Check your connection.
           </ThemedText>
         ) : null}
       </View>
 
-      <ScrollView contentContainerStyle={styles.content}>
-        {step === "diagnoses" ? (
-          <DiagnosisCodingStep
-            visitId={id}
-            assessmentId={assessment.data.id}
-            isComplete={isComplete}
-          />
-        ) : onCoding ? (
-          <CodingStep
-            assessmentId={assessment.data.id}
-            isComplete={isComplete}
-            onFinalize={(timing, admissionSource) =>
-              completeAssessment.mutate({ timing, admissionSource })
-            }
-            finalizing={completeAssessment.isPending}
-          />
-        ) : onReview ? (
-          <ReviewStep
-            suggestions={assessment.data.suggestions}
-            answers={answers}
-            isComplete={isComplete}
-            pending={extractAudio.isPending}
-            failed={extractAudio.isError}
-            onAccept={(itemCode, value) => saveAnswer.mutate({ itemCode, value })}
-          />
-        ) : (
-          oasisItemsBySection[step].map((item) => {
-            const current = answers.get(item.code);
-            return (
-              <ThemedView key={item.code} type="backgroundElement" style={styles.item}>
-                <ThemedText type="smallBold">
-                  {item.code} · {item.label}
-                </ThemedText>
-                <View style={styles.options}>
-                  {item.responses.map((response) => (
-                    <Pressable
-                      key={response.value}
-                      disabled={isComplete}
-                      onPress={() =>
-                        saveAnswer.mutate({ itemCode: item.code, value: response.value })
-                      }
-                    >
-                      <ThemedView
-                        type={response.value === current ? "backgroundSelected" : "background"}
-                        style={styles.option}
-                      >
-                        <ThemedText type="small">
-                          {response.value} · {response.label}
-                        </ThemedText>
-                      </ThemedView>
-                    </Pressable>
-                  ))}
-                </View>
-              </ThemedView>
-            );
-          })
-        )}
-      </ScrollView>
+      <View style={styles.pager}>
+        <Animated.View style={[styles.page, { transform }]}>
+          <ScrollView key={step} contentContainerStyle={styles.content}>
+            {step === "diagnoses" ? (
+              <DiagnosisCodingStep
+                visitId={id}
+                assessmentId={assessment.data.id}
+                isComplete={isComplete}
+              />
+            ) : onCoding ? (
+              <CodingStep
+                isComplete={isComplete}
+                timing={timing}
+                admission={admission}
+                onTimingChange={setTiming}
+                onAdmissionChange={setAdmission}
+                pdgm={pdgm}
+              />
+            ) : onReview ? (
+              <ReviewStep
+                suggestions={assessment.data.suggestions}
+                answers={answers}
+                isComplete={isComplete}
+                pending={extractAudio.isPending}
+                failed={extractAudio.isError}
+                onAccept={(itemCode, value) => saveAnswer.mutate({ itemCode, value })}
+              />
+            ) : (
+              <ScaleStep
+                section={step as OasisSection}
+                answers={answers}
+                isComplete={isComplete}
+                onAnswer={(itemCode, value) => saveAnswer.mutate({ itemCode, value })}
+              />
+            )}
+          </ScrollView>
+        </Animated.View>
+      </View>
 
-      <View style={styles.footer}>
-        <Pressable onPress={() => setStepIndex(index - 1)} disabled={index === 0} hitSlop={8}>
-          <ThemedText type="linkPrimary" style={index === 0 ? styles.disabled : undefined}>
-            Back
-          </ThemedText>
-        </Pressable>
-        {onCoding ? null : onReview ? (
-          <Pressable onPress={() => setStepIndex(codingIndex)} hitSlop={8}>
-            <ThemedText type="linkPrimary">See coding</ThemedText>
-          </Pressable>
+      <View style={[styles.footer, { paddingVertical: Spacing.five }]}>
+        <Button
+          title="Back"
+          variant="secondary"
+          size="compact"
+          onPress={() => goTo(index - 1)}
+          disabled={index === 0}
+          style={styles.footerButton}
+        />
+        {onCoding ? (
+          isComplete ? null : (
+            <Button
+              title="Complete visit"
+              size="compact"
+              loading={completeAssessment.isPending}
+              disabled={!pdgm.data?.clinicalGroupDriver}
+              onPress={() => completeAssessment.mutate({ timing, admissionSource: admission })}
+              style={styles.footerButton}
+            />
+          )
+        ) : onReview ? (
+          <Button
+            title="See coding"
+            size="compact"
+            onPress={() => goTo(codingIndex)}
+            style={styles.footerButton}
+          />
         ) : onLastScaleStep && !isComplete ? (
-          <Pressable onPress={() => void finish()} disabled={extractAudio.isPending} hitSlop={8}>
-            <ThemedText type="linkPrimary">
-              {extractAudio.isPending ? "Transcribing…" : "Finish"}
-            </ThemedText>
-          </Pressable>
+          <Button
+            title={extractAudio.isPending ? "Transcribing…" : "Finish"}
+            size="compact"
+            loading={extractAudio.isPending}
+            onPress={() => void finish()}
+            style={styles.footerButton}
+          />
         ) : (
-          <Pressable onPress={() => setStepIndex(index + 1)} hitSlop={8}>
-            <ThemedText type="linkPrimary">Next</ThemedText>
-          </Pressable>
+          <Button
+            title="Next"
+            size="compact"
+            onPress={() => goTo(index + 1)}
+            style={styles.footerButton}
+          />
         )}
       </View>
     </ThemedView>
-  );
-}
-
-function ReviewStep({
-  suggestions,
-  answers,
-  isComplete,
-  pending,
-  failed,
-  onAccept,
-}: {
-  suggestions: AnswerSuggestion[];
-  answers: Map<string, string>;
-  isComplete: boolean;
-  pending: boolean;
-  failed: boolean;
-  onAccept: (itemCode: string, value: string) => void;
-}) {
-  if (pending) {
-    return (
-      <View style={styles.centered}>
-        <ActivityIndicator />
-        <ThemedText type="small" themeColor="textSecondary">
-          Transcribing the visit…
-        </ThemedText>
-      </View>
-    );
-  }
-  if (suggestions.length === 0) {
-    return (
-      <ThemedText themeColor="textSecondary">
-        {failed ? "Couldn't transcribe the recording." : "No AI draft."} Your manual answers stand —
-        Complete to continue.
-      </ThemedText>
-    );
-  }
-  return (
-    <View style={styles.group}>
-      {suggestions.map((suggestion) => {
-        const current = answers.get(suggestion.itemCode);
-        const item = getOasisItem(suggestion.itemCode);
-        const matches = current === suggestion.value;
-        return (
-          <ThemedView key={suggestion.itemCode} type="backgroundElement" style={styles.item}>
-            <ThemedText type="smallBold">
-              {suggestion.itemCode} · {item?.label ?? ""}
-            </ThemedText>
-            {suggestion.transcriptSnippet ? (
-              <ThemedText type="small" themeColor="textSecondary">
-                “{suggestion.transcriptSnippet}”
-              </ThemedText>
-            ) : null}
-            <View style={styles.reviewRow}>
-              <ThemedText type="small" themeColor="textSecondary">
-                You: {labelFor(suggestion.itemCode, current) ?? "not answered"}
-              </ThemedText>
-              <ThemedText type="small">
-                AI: {labelFor(suggestion.itemCode, suggestion.value)}
-              </ThemedText>
-            </View>
-            {isComplete ? null : matches ? (
-              <ThemedText type="small" themeColor="textSecondary">
-                ✓ matches your answer
-              </ThemedText>
-            ) : (
-              <Pressable
-                onPress={() => onAccept(suggestion.itemCode, suggestion.value)}
-                hitSlop={8}
-              >
-                <ThemedText type="linkPrimary">Accept AI answer</ThemedText>
-              </Pressable>
-            )}
-          </ThemedView>
-        );
-      })}
-    </View>
   );
 }
 
@@ -332,39 +275,30 @@ const styles = StyleSheet.create({
   },
   header: {
     padding: Spacing.three,
-    gap: Spacing.one,
+    gap: Spacing.two,
+  },
+  headerTop: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  pager: {
+    flex: 1,
+    overflow: "hidden", // clip the off-screen step during the slide
+  },
+  page: {
+    flex: 1,
   },
   content: {
     padding: Spacing.three,
     gap: Spacing.two,
   },
-  group: {
-    gap: Spacing.two,
-  },
-  item: {
-    padding: Spacing.three,
-    borderRadius: Spacing.two,
-    gap: Spacing.two,
-  },
-  options: {
-    gap: Spacing.one,
-  },
-  option: {
-    padding: Spacing.two,
-    borderRadius: Spacing.one,
-  },
-  reviewRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    gap: Spacing.two,
-  },
   footer: {
     flexDirection: "row",
-    justifyContent: "space-between",
     padding: Spacing.three,
-    gap: Spacing.three,
+    gap: Spacing.two,
   },
-  disabled: {
-    opacity: 0.3,
+  footerButton: {
+    flex: 1,
   },
 });
