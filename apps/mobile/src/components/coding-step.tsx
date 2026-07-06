@@ -136,11 +136,6 @@ export function CodingStep({
         detail={result.comorbidity.subgroups.join(", ") || "no qualifying secondary"}
       />
 
-      <ThemedText type="small" themeColor="textSecondary">
-        Illustrative PDGM: real algorithm; clinical-group map scoped to our fixtures; points,
-        thresholds, and weights are illustrative pending the CMS final rule.
-      </ThemedText>
-
       {!isComplete && !result.clinicalGroupDriver ? (
         <ThemedText type="small" themeColor="textSecondary">
           Code a primary diagnosis to file, then Complete visit.
