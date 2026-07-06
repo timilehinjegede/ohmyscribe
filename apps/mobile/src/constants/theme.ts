@@ -24,6 +24,8 @@ export const Colors = {
     /** Tinted success fill for success chips/badges. */
     successMuted: "#E4F5E9",
     danger: "#E5484D",
+    /** Tinted danger fill for error chips/badges. */
+    dangerMuted: "#FCE9EA",
   },
   dark: {
     text: "#ECEDEE",
@@ -38,6 +40,7 @@ export const Colors = {
     success: "#3DD68C",
     successMuted: "#123122",
     danger: "#FF6369",
+    dangerMuted: "#3A1D1F",
   },
 } as const;
 

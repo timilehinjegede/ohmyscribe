@@ -3,7 +3,7 @@ import { StyleSheet, Text, View } from "react-native";
 import { Radius, Spacing } from "@/constants/theme";
 import { useTheme } from "@/hooks/use-theme";
 
-export type BadgeTone = "neutral" | "accent" | "success";
+export type BadgeTone = "neutral" | "accent" | "success" | "danger";
 
 /** A small status pill; `tone` picks a tinted, on-tone fill (e.g. `success` = green on green). */
 export function Badge({ label, tone = "neutral" }: { label: string; tone?: BadgeTone }) {
@@ -13,6 +13,7 @@ export function Badge({ label, tone = "neutral" }: { label: string; tone?: Badge
     neutral: { backgroundColor: theme.backgroundSelected, color: theme.textSecondary },
     accent: { backgroundColor: theme.accentMuted, color: theme.accent },
     success: { backgroundColor: theme.successMuted, color: theme.success },
+    danger: { backgroundColor: theme.dangerMuted, color: theme.danger },
   };
   const { backgroundColor, color } = tones[tone];
 
