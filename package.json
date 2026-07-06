@@ -7,6 +7,14 @@
     "ingestion"
   ],
   "scripts": {
+    "db:up": "docker compose up -d --wait",
+    "db:down": "docker compose down",
+    "db:reset": "docker compose down -v && docker compose up -d --wait && bun run db:migrate",
+    "db:migrate": "cd packages/db && bun run db:migrate",
+    "db:studio": "cd packages/db && bun run db:studio",
+    "api": "cd apps/api && bun run dev",
+    "watch": "cd ingestion && bun run watch",
+    "mobile": "cd apps/mobile && bun run start",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "bun test"
