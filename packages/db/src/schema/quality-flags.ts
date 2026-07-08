@@ -1,4 +1,4 @@
-import { boolean, index, pgTable, text, uuid } from "drizzle-orm/pg-core";
+import { boolean, index, pgTable, text, unique, uuid } from "drizzle-orm/pg-core";
 import { syncColumns } from "./columns.ts";
 import { qualityFlagKind } from "./enums.ts";
 import { assessments } from "./assessments.ts";
@@ -10,6 +10,7 @@ export const qualityFlags = pgTable(
     assessmentId: uuid("assessment_id")
       .notNull()
       .references(() => assessments.id),
+    ruleId: text("rule_id").notNull(),
     itemCode: text("item_code"),
     kind: qualityFlagKind("kind").notNull(),
     message: text("message").notNull(),
@@ -18,6 +19,7 @@ export const qualityFlags = pgTable(
   (t) => [
     index("quality_flags_server_seq_idx").on(t.serverSeq),
     index("quality_flags_assessment_id_idx").on(t.assessmentId),
+    unique("quality_flags_assessment_rule_unique").on(t.assessmentId, t.ruleId),
   ],
 );
 

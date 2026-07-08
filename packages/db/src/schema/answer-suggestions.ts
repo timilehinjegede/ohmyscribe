@@ -1,4 +1,4 @@
-import { index, pgTable, real, text, uuid } from "drizzle-orm/pg-core";
+import { index, integer, pgTable, real, text, uuid } from "drizzle-orm/pg-core";
 import { syncColumns } from "./columns.ts";
 import { answerSuggestionSource, answerSuggestionStatus } from "./enums.ts";
 import { assessments } from "./assessments.ts";
@@ -16,6 +16,8 @@ export const answerSuggestions = pgTable(
     suggestedValue: text("suggested_value"),
     rationale: text("rationale"),
     transcriptSnippet: text("transcript_snippet"),
+    snippetStart: integer("snippet_start"),
+    snippetEnd: integer("snippet_end"),
     confidence: real("confidence"),
     status: answerSuggestionStatus("status").notNull().default("pending"),
     source: answerSuggestionSource("source").notNull().default("audio"),
