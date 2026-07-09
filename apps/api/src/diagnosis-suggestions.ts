@@ -1,6 +1,7 @@
 import { and, eq, isNull } from "drizzle-orm";
 import { assessments, diagnoses, diagnosisSuggestions, type Db } from "@ohmyscribe/db";
 import { icd10ForSnomed } from "@ohmyscribe/shared";
+import { recordAuditEvent } from "./audit.ts";
 
 const SNOMED_SYSTEM = "http://snomed.info/sct";
 const MAX_SECONDARY = 5; // OASIS M1023 allows up to five other diagnoses.
@@ -69,10 +70,20 @@ export async function suggestCoding(
     const suggestion = await callModel(forModel);
     const picks = selectPicks(suggestion, new Set(rows.map((row) => row.diagnosisId)));
     if (picks.length === 0) return;
-    await db
-      .insert(diagnosisSuggestions)
-      .values(picks.map((pick) => ({ assessmentId, ...pick })))
-      .onConflictDoNothing();
+    await db.transaction(async (tx) => {
+      await tx
+        .insert(diagnosisSuggestions)
+        .values(picks.map((pick) => ({ assessmentId, ...pick })))
+        .onConflictDoNothing();
+      for (const pick of picks) {
+        await recordAuditEvent(tx, {
+          assessmentId,
+          itemCode: pick.diagnosisId,
+          event: "suggested",
+          actorId: null,
+        });
+      }
+    });
   } catch (error) {
     console.error("coding suggestion failed:", error);
   }
