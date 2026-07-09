@@ -8,4 +8,5 @@ export * from "./oasis/index.ts";
 export * from "./assessment.ts";
 export * from "./pdgm/index.ts";
 export * from "./quality/index.ts";
+export * from "./transcript.ts";
 export * from "./sync.ts";
