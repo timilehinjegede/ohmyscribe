@@ -9,4 +9,5 @@ export * from "./assessment.ts";
 export * from "./pdgm/index.ts";
 export * from "./quality/index.ts";
 export * from "./transcript.ts";
+export * from "./extraction/index.ts";
 export * from "./sync.ts";
