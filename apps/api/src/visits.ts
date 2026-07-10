@@ -58,6 +58,7 @@ export async function getVisit(db: Db, id: string) {
       .select({
         id: assessments.id,
         completedAt: assessments.completedAt,
+        reviewStatus: assessments.reviewStatus,
         answeredCount: count(assessmentAnswers.id),
         // Correlated subquery (not a second join, which would multiply against the answers).
         codedCount: sql<number>`(
@@ -85,6 +86,7 @@ export async function getVisit(db: Db, id: string) {
         answeredCount: Number(summary.answeredCount),
         codedCount: Number(summary.codedCount),
         completedAt: summary.completedAt,
+        reviewStatus: summary.reviewStatus,
       }
     : null;
 
