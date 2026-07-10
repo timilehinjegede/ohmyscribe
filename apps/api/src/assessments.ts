@@ -1,6 +1,15 @@
 import { and, eq, isNotNull, isNull, sql } from "drizzle-orm";
-import { answerSuggestions, assessmentAnswers, assessments, visits, type Db } from "@ohmyscribe/db";
-import type { PdgmResult } from "@ohmyscribe/shared";
+import {
+  answerSuggestions,
+  assessmentAnswers,
+  assessments,
+  assessmentTranscripts,
+  visits,
+  type Db,
+} from "@ohmyscribe/db";
+import type { PdgmResult, QualityFinding } from "@ohmyscribe/shared";
+import { reconcileProvenanceOnComplete } from "./audit.ts";
+import { persistQualityFlags } from "./quality-flags.ts";
 
 // Idempotent create-or-return: a retried or concurrent POST conflicts on the visitId
 // unique and re-reads the existing row instead of inserting a second assessment.
@@ -41,6 +50,8 @@ export async function getAssessment(db: Db, assessmentId: string) {
       itemCode: answerSuggestions.itemCode,
       value: answerSuggestions.suggestedValue,
       transcriptSnippet: answerSuggestions.transcriptSnippet,
+      snippetStart: answerSuggestions.snippetStart,
+      snippetEnd: answerSuggestions.snippetEnd,
       confidence: answerSuggestions.confidence,
     })
     .from(answerSuggestions)
@@ -53,9 +64,20 @@ export async function getAssessment(db: Db, assessmentId: string) {
     );
   // suggestedValue is nullable in the table but /extract always sets it; the filter guarantees it.
   const suggestions = suggestionRows.map((row) => ({ ...row, value: row.value! }));
+
+  const [transcriptRow] = await db
+    .select({ text: assessmentTranscripts.text })
+    .from(assessmentTranscripts)
+    .where(
+      and(
+        eq(assessmentTranscripts.assessmentId, assessmentId),
+        isNull(assessmentTranscripts.deletedAt),
+      ),
+    );
   return {
     ...assessment,
     pdgmSnapshot: assessment.pdgmSnapshot as PdgmResult | null,
+    transcript: transcriptRow?.text ?? null,
     answers,
     suggestions,
   };
@@ -87,14 +109,20 @@ export async function upsertAnswers(
     });
 }
 
-// Files the assessment: freezes the PDGM snapshot, stamps completedAt, and marks the visit
-// complete — atomically, so a filed record is all three or none.
-export async function completeAssessment(db: Db, assessmentId: string, pdgm: PdgmResult) {
+// Files the assessment: freezes the PDGM snapshot, stamps completedAt, marks the visit
+// complete, and persists the quality findings — atomically, so a filed record is all of it or none.
+export async function completeAssessment(
+  db: Db,
+  assessmentId: string,
+  pdgm: PdgmResult,
+  findings: QualityFinding[],
+) {
   const now = new Date();
   await db.transaction(async (tx) => {
     const [assessment] = await tx
-      .select({ visitId: assessments.visitId })
+      .select({ visitId: assessments.visitId, assignedUserId: visits.assignedUserId })
       .from(assessments)
+      .innerJoin(visits, eq(visits.id, assessments.visitId))
       .where(
         and(
           eq(assessments.id, assessmentId),
@@ -105,8 +133,12 @@ export async function completeAssessment(db: Db, assessmentId: string, pdgm: Pdg
     if (!assessment) return; // already complete or gone — idempotent
     await tx
       .update(assessments)
-      .set({ completedAt: now, updatedAt: now, pdgmSnapshot: pdgm })
+      .set({ completedAt: now, updatedAt: now, pdgmSnapshot: pdgm, reviewStatus: "pending_review" })
       .where(and(eq(assessments.id, assessmentId), isNull(assessments.completedAt)));
     await tx.update(visits).set({ status: "complete" }).where(eq(visits.id, assessment.visitId));
+    await persistQualityFlags(tx, assessmentId, findings);
+    // Filing requests carry no user identity (no auth), so the derived accept/override
+    // decisions are attributed to the visit's assigned nurse.
+    await reconcileProvenanceOnComplete(tx, assessmentId, assessment.assignedUserId);
   });
 }
