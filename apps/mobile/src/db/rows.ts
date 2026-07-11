@@ -1,5 +1,7 @@
 // All synced rows as stored in local SQLite in in json format.
 
+import type { PdgmResult } from "@ohmyscribe/shared";
+
 export type VisitRow = {
   id: string;
   patientId: string;
@@ -31,6 +33,8 @@ export type AssessmentRow = {
   id: string;
   visitId: string;
   completedAt: string | null;
+  pdgmSnapshot: PdgmResult | null;
+  reviewStatus: string | null;
 };
 
 export type AnswerRow = {
@@ -47,7 +51,16 @@ export type AnswerSuggestionRow = {
   itemCode: string;
   suggestedValue: string | null;
   transcriptSnippet: string | null;
+  snippetStart: number | null;
+  snippetEnd: number | null;
   confidence: number | null;
+};
+
+export type TranscriptRow = {
+  id: string;
+  assessmentId: string;
+  text: string;
+  createdAt: string;
 };
 
 export type CodingRow = {
@@ -66,4 +79,14 @@ export type DiagnosisSuggestionRow = {
   isPrimary: boolean;
   rationale: string | null;
   confidence: number | null;
+};
+
+export type QualityFlagRow = {
+  id: string;
+  assessmentId: string;
+  ruleId: string;
+  itemCode: string | null;
+  kind: string;
+  message: string;
+  resolved: boolean;
 };
