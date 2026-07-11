@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 import { oasisAnswerSchema } from "./oasis/index.ts";
-import { ADMISSION_SOURCES, TIMINGS } from "./pdgm/index.ts";
+import { ADMISSION_SOURCES, TIMINGS, type PdgmResult } from "./pdgm/index.ts";
 
 // Lenient on purpose: a strict catalog check would fail reads once an item leaves the catalog.
 export const assessmentAnswerSchema = z.object({
@@ -15,6 +15,8 @@ export const answerSuggestionSchema = z.object({
   itemCode: z.string(),
   value: z.string(),
   transcriptSnippet: z.string().nullable(),
+  snippetStart: z.number().int().nullable(),
+  snippetEnd: z.number().int().nullable(),
   confidence: z.number().nullable(),
 });
 export type AnswerSuggestion = z.infer<typeof answerSuggestionSchema>;
@@ -23,6 +25,8 @@ export const assessmentDetailSchema = z.object({
   id: z.string(),
   visitId: z.string(),
   completedAt: z.string().nullable(),
+  pdgmSnapshot: z.custom<PdgmResult>().nullable(),
+  transcript: z.string().nullable(),
   answers: z.array(assessmentAnswerSchema),
   suggestions: z.array(answerSuggestionSchema),
 });

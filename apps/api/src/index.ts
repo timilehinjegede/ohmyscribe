@@ -6,6 +6,7 @@ import {
   TIMINGS,
   completeRequestSchema,
   extractRequestSchema,
+  runQualityChecks,
   syncPullQuerySchema,
   syncPushRequestSchema,
   upsertAnswersSchema,
@@ -21,6 +22,9 @@ import { extractAnswers } from "./answer-suggestions.ts";
 import { getCodedDiagnoses, removeCoding, upsertCoding } from "./diagnosis-codings.ts";
 import { suggestCoding } from "./diagnosis-suggestions.ts";
 import { computeAssessmentPdgm } from "./pdgm.ts";
+import { gatherQualityContext } from "./quality-flags.ts";
+import { review } from "./routes/review.tsx";
+import { reviewer } from "./routes/reviewer.tsx";
 import { pull, push } from "./sync.ts";
 import { callCodingModel, callExtractModel, transcribeAudio } from "./openai.ts";
 import { db } from "./db.ts";
@@ -165,14 +169,29 @@ app.post(
   async (c) => {
     const { id } = c.req.valid("param");
     const { timing, admissionSource } = c.req.valid("json");
+    // The server is the gate of record: it re-runs the same checks the device shows live, so an
+    // offline or optimistic client can never file through a blocker.
+    const qualityContext = await gatherQualityContext(db, id);
+    if (!qualityContext) return c.json({ error: "assessment not found" }, 404);
+    const findings = runQualityChecks(qualityContext);
+    const blockers = findings.filter((finding) => finding.severity === "blocker");
+    if (blockers.length > 0) {
+      return c.json(
+        {
+          error: "quality blockers must be resolved to file",
+          blockers: blockers.map((blocker) => ({
+            ruleId: blocker.ruleId,
+            message: blocker.message,
+          })),
+        },
+        422,
+      );
+    }
     // Snapshot the grouping as it stands, then file it (assessment + visit) in one transaction.
     const pdgm = await computeAssessmentPdgm(db, id, timing, admissionSource);
     if (!pdgm) return c.json({ error: "assessment not found" }, 404);
-    // Can't file without a primary diagnosis — it drives the clinical group.
-    if (!pdgm.clinicalGroupDriver) {
-      return c.json({ error: "a primary diagnosis is required to file" }, 422);
-    }
-    await completeAssessment(db, id, pdgm);
+    const warnings = findings.filter((finding) => finding.severity !== "blocker");
+    await completeAssessment(db, id, pdgm, warnings);
     return c.json(await getAssessment(db, id));
   },
 );
@@ -277,6 +296,9 @@ app.delete(
     return c.json(await getCodedDiagnoses(db, id));
   },
 );
+
+app.route("/review", review);
+app.route("/reviewer", reviewer);
 
 export default {
   port: Number(process.env.PORT) || 3000,

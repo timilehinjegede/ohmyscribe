@@ -7,6 +7,8 @@ import {
   diagnosisCodings,
   diagnosisSuggestions,
   patients,
+  qualityFlags,
+  assessmentTranscripts,
   visits,
   type Db,
 } from "@ohmyscribe/db";
@@ -29,6 +31,8 @@ const PULL_TABLES = {
   diagnosis_codings: diagnosisCodings,
   answer_suggestions: answerSuggestions,
   diagnosis_suggestions: diagnosisSuggestions,
+  quality_flags: qualityFlags,
+  assessment_transcripts: assessmentTranscripts,
 };
 
 // "Everything the server has seen since cursor N." serverSeq is unique + monotonic, so `> since`
