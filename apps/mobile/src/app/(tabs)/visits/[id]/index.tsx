@@ -1,12 +1,14 @@
 import { Link, useLocalSearchParams } from "expo-router";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from "react-native";
-import { icd10ForSnomed } from "@ohmyscribe/shared";
+import { getOasisItem, icd10ForSnomed } from "@ohmyscribe/shared";
 
+import { Badge } from "@/components/badge";
 import { Button } from "@/components/button";
 import { Card } from "@/components/card";
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import { BottomTabInset, Spacing } from "@/constants/theme";
+import { useReviewFlags } from "@/data/assessment";
 import { useVisit } from "@/data/visits";
 import { formatDob, titleCase } from "@/lib/format";
 
@@ -24,6 +26,11 @@ function MetaRow({ label, value }: { label: string; value: string }) {
 export default function VisitDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { data: visit, isPending, isError, refetch } = useVisit(id);
+
+  const assessmentId = visit?.assessment?.id;
+  const returned = visit?.assessment?.reviewStatus === "returned";
+  const flagsQuery = useReviewFlags(assessmentId, { enabled: returned });
+  const reviewFlags = flagsQuery.data ?? [];
 
   if (isPending && id) {
     return (
@@ -48,9 +55,11 @@ export default function VisitDetailScreen() {
   const started = (assessment?.answeredCount ?? 0) > 0 || (assessment?.codedCount ?? 0) > 0;
   const assessmentLabel = assessment?.completedAt
     ? "View coding"
-    : started
-      ? "Continue assessment"
-      : "Start assessment";
+    : returned
+      ? "Address review"
+      : started
+        ? "Continue assessment"
+        : "Start assessment";
 
   return (
     <ThemedView style={styles.container}>
@@ -65,6 +74,23 @@ export default function VisitDetailScreen() {
             <MetaRow label="Date of birth" value={formatDob(visit.patient.dob)} />
           ) : null}
         </View>
+
+        {returned ? (
+          <Card style={styles.returnedBanner}>
+            <Badge label="Returned for review" tone="danger" />
+            <ThemedText type="small">
+              A reviewer returned this assessment, address the flags and refile.
+            </ThemedText>
+            {reviewFlags.map((flag) => (
+              <ThemedText key={flag.id} type="small" themeColor="textSecondary">
+                {flag.itemCode
+                  ? `${flag.itemCode} ${getOasisItem(flag.itemCode)?.label ?? ""} — `
+                  : ""}
+                {flag.message}
+              </ThemedText>
+            ))}
+          </Card>
+        ) : null}
 
         <Link href={`/visits/${id}/assessment`} asChild>
           <Button title={assessmentLabel} style={styles.cta} />
@@ -116,6 +142,10 @@ const styles = StyleSheet.create({
   },
   meta: {
     gap: Spacing.half,
+  },
+  returnedBanner: {
+    marginTop: Spacing.two,
+    gap: Spacing.one,
   },
   cta: {
     marginTop: Spacing.two,
