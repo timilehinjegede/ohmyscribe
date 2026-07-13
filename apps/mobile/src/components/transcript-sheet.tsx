@@ -63,8 +63,12 @@ export function TranscriptSheet({
       <ThemedView style={styles.sheet}>
         <View style={styles.header}>
           <ThemedText type="smallBold">Transcript</ThemedText>
-          <Pressable onPress={onClose} hitSlop={8}>
-            <HugeiconsIcon icon={Cancel01Icon} size={20} color={theme.textSecondary} />
+          <Pressable
+            onPress={onClose}
+            hitSlop={8}
+            style={[styles.closeButton, { backgroundColor: theme.backgroundElement }]}
+          >
+            <HugeiconsIcon icon={Cancel01Icon} size={16} color={theme.textSecondary} />
           </Pressable>
         </View>
         {transcript === null ? (
@@ -116,6 +120,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     padding: Spacing.three,
+  },
+  closeButton: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    alignItems: "center",
+    justifyContent: "center",
   },
   empty: {
     padding: Spacing.three,
