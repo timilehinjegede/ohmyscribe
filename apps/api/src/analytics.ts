@@ -26,7 +26,7 @@ export function bucketCaseMixWeights(caseMixWeights: number[], bucketEdges: numb
   if (bucketEdges.length === 0) return [{ label: "all", count: caseMixWeights.length }];
   const labels = [
     `< ${bucketEdges[0]}`,
-    ...bucketEdges.slice(0, -1).map((edge, index) => `${edge}–${bucketEdges[index + 1]}`),
+    ...bucketEdges.slice(0, -1).map((edge, index) => `${edge}-${bucketEdges[index + 1]}`),
     `≥ ${bucketEdges[bucketEdges.length - 1]}`,
   ];
   const counts = labels.map(() => 0);

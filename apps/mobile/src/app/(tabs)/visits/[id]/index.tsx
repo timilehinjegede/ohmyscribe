@@ -84,7 +84,7 @@ export default function VisitDetailScreen() {
             {reviewFlags.map((flag) => (
               <ThemedText key={flag.id} type="small" themeColor="textSecondary">
                 {flag.itemCode
-                  ? `${flag.itemCode} ${getOasisItem(flag.itemCode)?.label ?? ""} — `
+                  ? `${flag.itemCode} ${getOasisItem(flag.itemCode)?.label ?? ""}: `
                   : ""}
                 {flag.message}
               </ThemedText>

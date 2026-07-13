@@ -28,13 +28,13 @@ export type ClinicalGroup =
   | "BEHAVIORAL_HEALTH";
 
 export const CLINICAL_GROUP_LABELS: Record<ClinicalGroup, string> = {
-  MMTA_CARDIAC: "MMTA – Cardiac & Circulatory",
-  MMTA_RESPIRATORY: "MMTA – Respiratory",
-  MMTA_ENDOCRINE: "MMTA – Endocrine",
-  MMTA_GI_GU: "MMTA – GI / GU",
-  MMTA_INFECTIOUS: "MMTA – Infectious / Neoplasm / Blood",
-  MMTA_SURGICAL: "MMTA – Surgical Aftercare",
-  MMTA_OTHER: "MMTA – Other",
+  MMTA_CARDIAC: "MMTA - Cardiac & Circulatory",
+  MMTA_RESPIRATORY: "MMTA - Respiratory",
+  MMTA_ENDOCRINE: "MMTA - Endocrine",
+  MMTA_GI_GU: "MMTA - GI / GU",
+  MMTA_INFECTIOUS: "MMTA - Infectious / Neoplasm / Blood",
+  MMTA_SURGICAL: "MMTA - Surgical Aftercare",
+  MMTA_OTHER: "MMTA - Other",
   NEURO_REHAB: "Neuro / Stroke Rehabilitation",
   WOUND: "Wound",
   COMPLEX_NURSING: "Complex Nursing Interventions",

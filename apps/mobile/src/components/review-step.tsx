@@ -69,7 +69,7 @@ export function ReviewStep({
         extraction?.status === "uploading" ? (
           <Card type="accentMuted">
             <ThemedText type="small" style={{ color: theme.accent }}>
-              Transcribing your recording — AI drafts will appear shortly.
+              Transcribing your recording. AI drafts will appear shortly.
             </ThemedText>
           </Card>
         ) : extraction?.status === "queued" ? (

@@ -20,9 +20,9 @@ test("bucketCaseMixWeights places weights into half-open buckets, edges falling 
   const buckets = bucketCaseMixWeights([0.5, 0.8, 0.9, 1.0, 1.19, 1.2, 1.4, 2.0], CMI_BUCKET_EDGES);
   expect(buckets.map((bucket) => bucket.label)).toEqual([
     "< 0.8",
-    "0.8–1",
-    "1–1.2",
-    "1.2–1.4",
+    "0.8-1",
+    "1-1.2",
+    "1.2-1.4",
     "≥ 1.4",
   ]);
   expect(buckets.map((bucket) => bucket.count)).toEqual([1, 2, 2, 1, 2]);
@@ -66,9 +66,9 @@ const populatedFixture: AnalyticsData = {
   cmiDistribution: {
     buckets: [
       { label: "< 0.8", count: 0 },
-      { label: "0.8–1", count: 2 },
-      { label: "1–1.2", count: 1 },
-      { label: "1.2–1.4", count: 0 },
+      { label: "0.8-1", count: 2 },
+      { label: "1-1.2", count: 1 },
+      { label: "1.2-1.4", count: 0 },
       { label: "≥ 1.4", count: 0 },
     ],
     filedCount: 3,
