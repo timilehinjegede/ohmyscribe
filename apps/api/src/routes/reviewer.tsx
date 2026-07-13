@@ -11,7 +11,7 @@ export function barWidthPercent(fraction: number | null): number {
 }
 
 const formatRate = (rate: number | null): string =>
-  rate === null ? "—" : `${Math.round(rate * 100)}%`;
+  rate === null ? "-" : `${Math.round(rate * 100)}%`;
 
 function Bar({ fraction }: { fraction: number | null }) {
   return (
@@ -41,9 +41,9 @@ function AcceptanceSection({ data }: { data: AnalyticsData }) {
           <thead>
             <tr>
               <th>Item</th>
-              <th>Accepted</th>
-              <th>Overridden</th>
-              <th>Pending</th>
+              <th class="num">Accepted</th>
+              <th class="num">Overridden</th>
+              <th class="num">Pending</th>
               <th>Acceptance rate</th>
             </tr>
           </thead>
@@ -104,7 +104,7 @@ function LowConfidenceSection({ data }: { data: AnalyticsData }) {
               <td>
                 {getOasisResponseLabel(accept.itemCode, accept.suggestedValue ?? undefined) ??
                   accept.suggestedValue ??
-                  "—"}
+                  "-"}
               </td>
               <td class="num">{Math.round(accept.confidence * 100)}%</td>
             </tr>
@@ -131,13 +131,13 @@ function CmiSection({ data }: { data: AnalyticsData }) {
       <h2>Case-mix distribution</h2>
       <p class="muted">
         {filedCount} filed visit{filedCount === 1 ? "" : "s"} · mean case-mix weight{" "}
-        {meanCaseMixWeight === null ? "—" : meanCaseMixWeight.toFixed(3)}
+        {meanCaseMixWeight === null ? "-" : meanCaseMixWeight.toFixed(3)}
       </p>
       <table>
         <thead>
           <tr>
             <th>Case-mix weight</th>
-            <th>Visits</th>
+            <th class="num">Visits</th>
             <th></th>
           </tr>
         </thead>
@@ -173,9 +173,9 @@ function PerNurseSection({ data }: { data: AnalyticsData }) {
         <thead>
           <tr>
             <th>Nurse</th>
-            <th>Filed visits</th>
-            <th>Accepted</th>
-            <th>Overridden</th>
+            <th class="num">Filed visits</th>
+            <th class="num">Accepted</th>
+            <th class="num">Overridden</th>
             <th>Acceptance rate</th>
           </tr>
         </thead>
@@ -202,7 +202,7 @@ function PerNurseSection({ data }: { data: AnalyticsData }) {
 
 function AnalyticsPage({ data }: { data: AnalyticsData }) {
   return (
-    <Layout title="AI provenance analytics">
+    <Layout title="AI provenance analytics" active="analytics">
       <h1>AI provenance analytics</h1>
       <AcceptanceSection data={data} />
       <LowConfidenceSection data={data} />

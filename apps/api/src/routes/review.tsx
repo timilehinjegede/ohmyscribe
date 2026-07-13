@@ -24,11 +24,11 @@ import {
   type ReviewQueueItem,
 } from "../review.ts";
 
-const formatDate = (date: Date | null) => (date ? date.toISOString().slice(0, 10) : "—");
+const formatDate = (date: Date | null) => (date ? date.toISOString().slice(0, 10) : "-");
 
 function MessagePage({ title, message }: { title: string; message: string }) {
   return (
-    <Layout title={title}>
+    <Layout title={title} active="queue">
       <h1>{title}</h1>
       <p>{message}</p>
       <p>
@@ -54,7 +54,7 @@ function StatusPill({ reviewStatus }: { reviewStatus: string | null }) {
 
 function QueuePage({ queue }: { queue: ReviewQueueItem[] }) {
   return (
-    <Layout title="Review queue">
+    <Layout title="Review queue" active="queue">
       <h1>Review queue</h1>
       {queue.length === 0 ? (
         <p class="muted">No assessments awaiting review.</p>
@@ -78,7 +78,7 @@ function QueuePage({ queue }: { queue: ReviewQueueItem[] }) {
                 <td>{item.patientName ?? "Unknown patient"}</td>
                 <td>{item.nurseName ?? "Unassigned"}</td>
                 <td>{formatDate(item.visitDate)}</td>
-                <td>{item.caseMixWeight ?? "—"}</td>
+                <td>{item.caseMixWeight ?? "-"}</td>
                 <td>{item.disagreements}</td>
                 <td>{item.unresolvedFlagCount}</td>
                 <td>
@@ -106,7 +106,7 @@ function DiagnosisRow({ diagnosis }: { diagnosis: CodedDiagnosis }) {
           {diagnosis.onset ? ` · onset ${diagnosis.onset.slice(0, 10)}` : ""}
         </div>
       </td>
-      <td>{diagnosis.suggestedCode?.icd10 ?? "—"}</td>
+      <td>{diagnosis.suggestedCode?.icd10 ?? "-"}</td>
       <td>
         {diagnosis.suggestion ? (
           <>
@@ -119,7 +119,7 @@ function DiagnosisRow({ diagnosis }: { diagnosis: CodedDiagnosis }) {
             ) : null}
           </>
         ) : (
-          "—"
+          "-"
         )}
       </td>
       <td>
@@ -167,7 +167,7 @@ function PdgmBlock({ snapshot }: { snapshot: PdgmResult | null }) {
         </tr>
         <tr>
           <th>Estimated payment</th>
-          <td>${snapshot.estimatedPayment}</td>
+          <td>${snapshot.estimatedPayment.toLocaleString("en-US")}</td>
         </tr>
       </tbody>
     </table>
@@ -179,7 +179,7 @@ function DetailPage({ detail }: { detail: ReviewDetail }) {
   const filed = detail.completedAt !== null;
 
   return (
-    <Layout title={`Review · ${patientName}`}>
+    <Layout title={`Review · ${patientName}`} active="queue">
       <h1>
         {patientName} <StatusPill reviewStatus={detail.reviewStatus} />
       </h1>
@@ -233,7 +233,11 @@ function DetailPage({ detail }: { detail: ReviewDetail }) {
           <div class="action">
             <label>
               Note to the nurse
-<textarea name="message" rows={3}></textarea>
+              <textarea
+                name="message"
+                rows={3}
+                placeholder="Anything the nurse should revisit before refiling..."
+              ></textarea>
             </label>
             <div class="buttons">
               <button type="submit" class="return">
@@ -252,7 +256,7 @@ function DetailPage({ detail }: { detail: ReviewDetail }) {
       ) : (
         <>
           <AnswersTable detail={detail} flaggable={false} />
-          <p class="muted">Returned to the nurse — actions unlock when the assessment is refiled.</p>
+          <p class="muted">Returned to the nurse. Actions unlock when the assessment is refiled.</p>
         </>
       )}
     </Layout>
@@ -310,7 +314,7 @@ function AnswersTable({ detail, flaggable }: { detail: ReviewDetail; flaggable: 
                     ) : null}
                   </>
                 ) : (
-                  "—"
+                  "-"
                 )}
               </td>
               <td>
