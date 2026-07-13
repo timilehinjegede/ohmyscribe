@@ -1,5 +1,6 @@
 import { useLocalSearchParams } from "expo-router";
 import { useEffect, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { ActivityIndicator, Animated, Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
@@ -10,6 +11,9 @@ import {
   useAudioRecorderState,
 } from "expo-audio";
 import {
+  buildPdgmInput,
+  computePdgm,
+  diffPdgm,
   oasisSections,
   type AdmissionSource,
   type OasisSection,
@@ -19,6 +23,7 @@ import {
 import { Button } from "@/components/button";
 import { CodingStep } from "@/components/coding-step";
 import { DiagnosisCodingStep } from "@/components/diagnosis-coding-step";
+import { PdgmFooter, type PdgmImpact } from "@/components/pdgm-footer";
 import { ProgressBar } from "@/components/progress-bar";
 import { RecordingIndicator } from "@/components/recording-indicator";
 import { ReviewStep } from "@/components/review-step";
@@ -26,13 +31,13 @@ import { ScaleStep } from "@/components/scale-step";
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import { Spacing } from "@/constants/theme";
-import {
-  useAssessment,
-  useCompleteAssessment,
-  useExtractAudio,
-  useSaveAnswer,
-} from "@/data/assessment";
-import { usePdgm } from "@/data/pdgm";
+import { useAssessment, useCompleteAssessment, useSaveAnswer } from "@/data/assessment";
+import { useCodedDiagnoses } from "@/data/diagnosis-coding";
+import { usePendingExtraction } from "@/data/extractions";
+import { useLocalPdgm } from "@/data/local-pdgm";
+import { enqueueExtraction } from "@/db/extractions";
+import { drainExtractions } from "@/sync";
+import { useQualityChecks } from "@/hooks/use-quality-checks";
 import { useStepSlide } from "@/hooks/use-step-slide";
 import { useTheme } from "@/hooks/use-theme";
 
@@ -56,10 +61,11 @@ export default function AssessmentWizard() {
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const recorderState = useAudioRecorderState(recorder);
 
+  const queryClient = useQueryClient();
   const assessment = useAssessment(id);
   const saveAnswer = useSaveAnswer(id, assessment.data?.id ?? "");
   const completeAssessment = useCompleteAssessment(id, assessment.data?.id ?? "");
-  const extractAudio = useExtractAudio(id, assessment.data?.id ?? "");
+  const pendingExtraction = usePendingExtraction(assessment.data?.id ?? "");
 
   const isComplete = Boolean(assessment.data?.completedAt);
 
@@ -71,11 +77,19 @@ export default function AssessmentWizard() {
 
   const [timing, setTiming] = useState<Timing>("early");
   const [admission, setAdmission] = useState<AdmissionSource>("community");
-  const pdgm = usePdgm(assessment.data?.id ?? "", timing, admission, {
-    enabled: step === "coding",
-  });
+  const [impact, setImpact] = useState<PdgmImpact | null>(null);
 
-  // Record the visit from the moment the assessment opens; Finish stops + uploads it.
+  const codedDiagnoses = useCodedDiagnoses(assessment.data?.id ?? "");
+  const liveResult = useLocalPdgm(assessment.data, codedDiagnoses.data, timing, admission);
+  const { blockers, warnings } = useQualityChecks(
+    assessment.data?.answers ?? [],
+    codedDiagnoses.data,
+  );
+  const [acknowledged, setAcknowledged] = useState<Set<string>>(new Set());
+  const acknowledgeWarning = (ruleId: string) =>
+    setAcknowledged((previous) => new Set(previous).add(ruleId));
+
+  // Record the visit from the moment the assessment opens; Finish stops + queues it for upload.
   useEffect(() => {
     if (!assessment.data || isComplete) return;
     let active = true;
@@ -126,6 +140,8 @@ export default function AssessmentWizard() {
   }
 
   const answers = new Map(assessment.data.answers.map((answer) => [answer.itemCode, answer.value]));
+  const unacknowledgedWarnings = warnings.filter((warning) => !acknowledged.has(warning.ruleId));
+  const fileBlocked = blockers.length > 0 || unacknowledgedWarnings.length > 0;
   const reviewIndex = steps.indexOf("review");
   const codingIndex = steps.indexOf("coding");
   const onReview = step === "review";
@@ -137,6 +153,22 @@ export default function AssessmentWizard() {
     setStepIndex(next);
   };
 
+  // The impact is diffed eagerly, before the save lands, and only for the recorded value — the
+  // footer never previews what an option would pay before the clinician commits to it.
+  const recordAnswer = (itemCode: string, value: string) => {
+    if (liveResult && assessment.data) {
+      const nextAnswers = [
+        ...assessment.data.answers.filter((answer) => answer.itemCode !== itemCode),
+        { itemCode, value },
+      ];
+      const nextResult = computePdgm(
+        buildPdgmInput(codedDiagnoses.data ?? [], nextAnswers, timing, admission),
+      );
+      setImpact({ itemCode, delta: diffPdgm(liveResult, nextResult) });
+    }
+    saveAnswer.mutate({ itemCode, value });
+  };
+
   const finish = async () => {
     if (recorder.isRecording) {
       try {
@@ -146,12 +178,16 @@ export default function AssessmentWizard() {
       }
     }
     const uri = recorder.uri;
-    // A transcription/upload failure surfaces via extractAudio.isError in the review step.
-    if (uri) {
+    const assessmentId = assessment.data?.id;
+    if (uri && assessmentId) {
       try {
-        await extractAudio.mutateAsync(uri);
+        await enqueueExtraction(assessmentId, uri, new Date().toISOString());
+        queryClient.invalidateQueries({ queryKey: ["pending-extraction", assessmentId] });
+        queryClient.invalidateQueries({ queryKey: ["sync-status"] });
+        // Fire-and-forget: drains now if online, otherwise the next sync trigger picks it up.
+        void drainExtractions();
       } catch {
-        // handled via extractAudio.isError
+        // Move/enqueue failed: degrade to no-draft and still advance.
       }
     }
     goTo(reviewIndex);
@@ -197,28 +233,40 @@ export default function AssessmentWizard() {
                 admission={admission}
                 onTimingChange={setTiming}
                 onAdmissionChange={setAdmission}
-                pdgm={pdgm}
+                result={liveResult!} // non-null once assessment.data passed the guards above
+                transcript={assessment.data.transcript}
+                blockerCount={blockers.length}
+                unacknowledgedCount={unacknowledgedWarnings.length}
               />
             ) : onReview ? (
               <ReviewStep
                 suggestions={assessment.data.suggestions}
                 answers={answers}
                 isComplete={isComplete}
-                pending={extractAudio.isPending}
-                failed={extractAudio.isError}
-                onAccept={(itemCode, value) => saveAnswer.mutate({ itemCode, value })}
+                extraction={pendingExtraction.data ?? null}
+                transcript={assessment.data.transcript}
+                blockers={blockers}
+                warnings={warnings}
+                acknowledged={acknowledged}
+                onAcknowledge={acknowledgeWarning}
+                onAccept={recordAnswer}
               />
             ) : (
               <ScaleStep
                 section={step as OasisSection}
                 answers={answers}
                 isComplete={isComplete}
-                onAnswer={(itemCode, value) => saveAnswer.mutate({ itemCode, value })}
+                onAnswer={recordAnswer}
               />
             )}
           </ScrollView>
         </Animated.View>
       </View>
+
+      {/* The coding step already shows the full breakdown card; a filed record is read-only. */}
+      {!isComplete && !onCoding ? (
+        <PdgmFooter result={liveResult} impact={impact} onDismiss={() => setImpact(null)} />
+      ) : null}
 
       <View style={[styles.footer, { paddingVertical: Spacing.five }]}>
         <Button
@@ -235,7 +283,7 @@ export default function AssessmentWizard() {
               title="Complete visit"
               size="compact"
               loading={completeAssessment.isPending}
-              disabled={!pdgm.data?.clinicalGroupDriver}
+              disabled={fileBlocked || completeAssessment.isPending}
               onPress={() => completeAssessment.mutate({ timing, admissionSource: admission })}
               style={styles.footerButton}
             />
@@ -249,9 +297,8 @@ export default function AssessmentWizard() {
           />
         ) : onLastScaleStep && !isComplete ? (
           <Button
-            title={extractAudio.isPending ? "Transcribing..." : "Finish"}
+            title="Finish"
             size="compact"
-            loading={extractAudio.isPending}
             onPress={() => void finish()}
             style={styles.footerButton}
           />

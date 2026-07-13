@@ -4,7 +4,7 @@ import * as SQLite from "expo-sqlite";
 // pull cursor source) and a device-only sync_status ('synced' | 'pending' | 'error') that drives
 // the push queue. Views are rebuilt in JS from these rows; the data is small enough that in-memory
 // joins beat mirroring every column into typed tables.
-const db = SQLite.openDatabaseSync("ohmyscribe.db");
+export const db = SQLite.openDatabaseSync("ohmyscribe.db");
 
 db.execSync(`
   CREATE TABLE IF NOT EXISTS sync_rows (
@@ -18,6 +18,16 @@ db.execSync(`
     PRIMARY KEY (tbl, id)
   );
   CREATE TABLE IF NOT EXISTS sync_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+  -- Device-only queue of recorded audio awaiting upload. assessment_id is the PK so a re-record
+  -- replaces the pending row (newest wins); a finished upload deletes the row rather than keeping
+  -- a terminal status.
+  CREATE TABLE IF NOT EXISTS pending_extractions (
+    assessment_id TEXT PRIMARY KEY,
+    file_uri TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'queued',
+    attempts INTEGER NOT NULL DEFAULT 0,
+    recorded_at TEXT NOT NULL
+  );
 `);
 
 // The sync trio the server sends on every row (camelCase, since drizzle returns schema field names).
@@ -51,7 +61,10 @@ export async function localRow<T = Record<string, unknown>>(
 // All rows for a table INCLUDING soft-deleted, for reusing a logical row's id when the nurse
 // re-adds something they removed, so the push revives that server row instead of colliding on it.
 export async function allRows<T = Record<string, unknown>>(tbl: string): Promise<T[]> {
-  const rows = await db.getAllAsync<{ data: string }>(`SELECT data FROM sync_rows WHERE tbl = ?`, tbl);
+  const rows = await db.getAllAsync<{ data: string }>(
+    `SELECT data FROM sync_rows WHERE tbl = ?`,
+    tbl,
+  );
   return rows.map((r) => JSON.parse(r.data) as T);
 }
 
@@ -125,7 +138,12 @@ export async function pendingRows(): Promise<
   const rows = await db.getAllAsync<{ tbl: string; id: string; updated_at: string; data: string }>(
     `SELECT tbl, id, updated_at, data FROM sync_rows WHERE sync_status = 'pending'`,
   );
-  return rows.map((r) => ({ tbl: r.tbl, id: r.id, updatedAt: r.updated_at, data: JSON.parse(r.data) }));
+  return rows.map((r) => ({
+    tbl: r.tbl,
+    id: r.id,
+    updatedAt: r.updated_at,
+    data: JSON.parse(r.data),
+  }));
 }
 
 // Version-guarded ack: clear pending only if the row hasn't been edited since we pushed this exact

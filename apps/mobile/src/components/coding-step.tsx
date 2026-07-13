@@ -1,5 +1,7 @@
-import { type ReactNode } from "react";
-import { ActivityIndicator, Pressable, StyleSheet, View } from "react-native";
+import { useState, type ReactNode } from "react";
+import { Pressable, StyleSheet, View } from "react-native";
+import { FileSearchIcon } from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react-native";
 import {
   getOasisItem,
   type AdmissionSource,
@@ -8,12 +10,12 @@ import {
   type PdgmResult,
   type Timing,
 } from "@ohmyscribe/shared";
-import type { UseQueryResult } from "@tanstack/react-query";
 
 import { Badge } from "@/components/badge";
 import { Card } from "@/components/card";
 import { SegmentedControl } from "@/components/segmented-control";
 import { ThemedText } from "@/components/themed-text";
+import { TranscriptSheet } from "@/components/transcript-sheet";
 import { Spacing } from "@/constants/theme";
 import { useTheme } from "@/hooks/use-theme";
 
@@ -33,44 +35,62 @@ const ADMISSION_LABEL: Record<AdmissionSource, string> = {
   institutional: "Institutional",
 };
 
+const fileHint = (blockerCount: number, unacknowledgedCount: number): string => {
+  const steps = [
+    blockerCount > 0 ? `resolve ${blockerCount} blocker${blockerCount === 1 ? "" : "s"}` : null,
+    unacknowledgedCount > 0
+      ? `acknowledge ${unacknowledgedCount} warning${unacknowledgedCount === 1 ? "" : "s"} on the Review step`
+      : null,
+  ].filter((step) => step !== null);
+  return `To file: ${steps.join(" and ")}.`;
+};
+
 export function CodingStep({
   isComplete,
   timing,
   admission,
   onTimingChange,
   onAdmissionChange,
-  pdgm,
+  result,
+  transcript,
+  blockerCount,
+  unacknowledgedCount,
 }: {
   isComplete: boolean;
   timing: Timing;
   admission: AdmissionSource;
   onTimingChange: (timing: Timing) => void;
   onAdmissionChange: (admissionSource: AdmissionSource) => void;
-  pdgm: UseQueryResult<PdgmResult>;
+  result: PdgmResult;
+  transcript: string | null;
+  blockerCount: number;
+  unacknowledgedCount: number;
 }) {
   const theme = useTheme();
-
-  if (pdgm.isPending) {
-    return (
-      <View style={styles.centered}>
-        <ActivityIndicator />
-      </View>
-    );
-  }
-  if (pdgm.isError || !pdgm.data) {
-    return (
-      <View style={styles.centered}>
-        <ThemedText themeColor="textSecondary">Could not compute the PDGM grouping.</ThemedText>
-        <Pressable onPress={() => pdgm.refetch()} hitSlop={8}>
-          <ThemedText type="linkPrimary">Retry</ThemedText>
-        </Pressable>
-      </View>
-    );
-  }
-  const result = pdgm.data;
+  const [transcriptOpen, setTranscriptOpen] = useState(false);
 
   return (
     <View style={styles.group}>
+      {isComplete ? (
+        <>
+          <Pressable
+            onPress={() => setTranscriptOpen(true)}
+            hitSlop={8}
+            style={styles.transcriptLink}
+          >
+            <HugeiconsIcon icon={FileSearchIcon} size={16} color={theme.accent} />
+            <ThemedText type="linkPrimary">View visit transcript</ThemedText>
+          </Pressable>
+          <TranscriptSheet
+            visible={transcriptOpen}
+            transcript={transcript}
+            snippet={null}
+            snippetStart={null}
+            snippetEnd={null}
+            onClose={() => setTranscriptOpen(false)}
+          />
+        </>
+      ) : null}
       <Card style={styles.payment}>
         {isComplete ? <Badge label="Filed" tone="success" /> : null}
         <ThemedText type="small" themeColor="textSecondary">
@@ -79,9 +99,20 @@ export function CodingStep({
         <ThemedText type="subtitle" style={{ color: theme.accent }}>
           ${result.estimatedPayment.toLocaleString()}
         </ThemedText>
-        <ThemedText type="small" themeColor="textSecondary">
-          Illustrative · case-mix weight {result.caseMixWeight}
-        </ThemedText>
+        {result.weightApproximated ? (
+          <ThemedText type="small" themeColor="textSecondary">
+            Illustrative · case-mix weight {result.caseMixWeight}
+          </ThemedText>
+        ) : (
+          <>
+            <ThemedText type="small" themeColor="textSecondary">
+              CMS CY2025 base-rate estimate · weight {result.caseMixWeight}
+            </ThemedText>
+            <ThemedText type="small" themeColor="textSecondary">
+              Excludes wage index, LUPA & outliers
+            </ThemedText>
+          </>
+        )}
       </Card>
 
       {isComplete ? (
@@ -118,7 +149,14 @@ export function CodingStep({
         detail={
           result.clinicalGroupDriver ? `from ${result.clinicalGroupDriver}` : "no primary coded"
         }
-      />
+      >
+        {/* An uncoded primary gets the gentler hint below, not the return-to-provider warning. */}
+        {result.clinicalGroupDriver && !result.primaryAcceptable ? (
+          <ThemedText type="small" themeColor="danger">
+            Primary not valid for PDGM (return to provider)
+          </ThemedText>
+        ) : null}
+      </Dimension>
       <Dimension
         label="Functional level"
         value={FUNCTIONAL_LABEL[result.functional.level]}
@@ -139,6 +177,11 @@ export function CodingStep({
       {!isComplete && !result.clinicalGroupDriver ? (
         <ThemedText type="small" themeColor="textSecondary">
           Code a primary diagnosis to file, then Complete visit.
+        </ThemedText>
+      ) : null}
+      {!isComplete && (blockerCount > 0 || unacknowledgedCount > 0) ? (
+        <ThemedText type="small" themeColor="textSecondary">
+          {fileHint(blockerCount, unacknowledgedCount)}
         </ThemedText>
       ) : null}
     </View>
@@ -205,11 +248,10 @@ function Dimension({
 }
 
 const styles = StyleSheet.create({
-  centered: {
+  transcriptLink: {
+    flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
-    gap: Spacing.two,
-    paddingVertical: Spacing.four,
+    gap: Spacing.one,
   },
   group: {
     gap: Spacing.two,

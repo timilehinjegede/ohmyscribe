@@ -1,6 +1,7 @@
-import { eq } from "drizzle-orm";
-import { answerSuggestions, type Db } from "@ohmyscribe/db";
-import { oasisAnswerSchema, OASIS_ITEMS } from "@ohmyscribe/shared";
+import { eq, sql } from "drizzle-orm";
+import { answerSuggestions, assessmentTranscripts, type Db } from "@ohmyscribe/db";
+import { oasisAnswerSchema, resolveSnippetRange, OASIS_ITEMS } from "@ohmyscribe/shared";
+import { recordAuditEvent } from "./audit.ts";
 
 // The provider-agnostic seam between this orchestration and a concrete model call (see openai.ts).
 export type TranscriptItem = {
@@ -58,17 +59,42 @@ export async function extractAnswers(
   // A fresh transcript replaces the prior drafts; hard-delete since these never leave the server yet.
   // One transaction so a mid-replace failure can't wipe the old drafts and leave none behind.
   await db.transaction(async (tx) => {
+    // Upsert-in-place (not delete+insert) so the update trigger bumps server_seq and the pull
+    // picks up the replaced text. Persisted even when no draft survives validation; a blank
+    // transcription is not since it would clobber good text and render as an empty sheet.
+    if (transcript.trim() !== "") {
+      await tx
+        .insert(assessmentTranscripts)
+        .values({ assessmentId, text: transcript, updatedAt: new Date() })
+        .onConflictDoUpdate({
+          target: assessmentTranscripts.assessmentId,
+          set: { text: sql`excluded.text`, updatedAt: sql`excluded.updated_at` },
+        });
+    }
     await tx.delete(answerSuggestions).where(eq(answerSuggestions.assessmentId, assessmentId));
     if (drafts.length === 0) return;
     await tx.insert(answerSuggestions).values(
-      drafts.map((answer) => ({
+      drafts.map((answer) => {
+        const snippetRange = resolveSnippetRange(transcript, answer.transcriptSnippet);
+        return {
+          assessmentId,
+          itemCode: answer.itemCode,
+          suggestedValue: answer.value,
+          transcriptSnippet: answer.transcriptSnippet,
+          snippetStart: snippetRange?.start ?? null,
+          snippetEnd: snippetRange?.end ?? null,
+          confidence: Math.max(0, Math.min(1, answer.confidence)),
+        };
+      }),
+    );
+    for (const answer of drafts) {
+      await recordAuditEvent(tx, {
         assessmentId,
         itemCode: answer.itemCode,
-        suggestedValue: answer.value,
-        transcriptSnippet: answer.transcriptSnippet,
-        confidence: Math.max(0, Math.min(1, answer.confidence)),
-      })),
-    );
+        event: "suggested",
+        actorId: null,
+      });
+    }
   });
   return drafts.length;
 }

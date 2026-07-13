@@ -23,6 +23,7 @@ export const assessmentSummarySchema = z.object({
   answeredCount: z.number(),
   codedCount: z.number(),
   completedAt: z.string().nullable(),
+  reviewStatus: z.string().nullable(),
 });
 
 export const visitDetailSchema = visitSummarySchema.extend({

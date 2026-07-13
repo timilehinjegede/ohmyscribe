@@ -1,10 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { FileSystemUploadType, uploadAsync } from "expo-file-system/legacy";
 import type { AdmissionSource, AssessmentDetail, Timing } from "@ohmyscribe/shared";
 
 import { API_URL } from "@/config";
 import { pendingCount } from "@/db/sqlite";
-import { localAssessment } from "@/db/views";
+import { localAssessment, localFlags } from "@/db/views";
 import { saveAnswerLocal } from "@/db/writes";
 import { HttpError } from "@/data/http";
 import { pullSync, pushSync, syncNow } from "@/sync";
@@ -95,28 +94,13 @@ export function useCompleteAssessment(_visitId: string, assessmentId: string) {
   });
 }
 
-async function extractFromAudio(assessmentId: string, uri: string) {
-  // Expo SDK 57's FormData rejects React Native's { uri } file part, so upload via the native
-  // multipart uploader instead of fetch + FormData.
-  const result = await uploadAsync(`${API_URL}/assessments/${assessmentId}/extract-audio`, uri, {
-    httpMethod: "POST",
-    uploadType: FileSystemUploadType.MULTIPART,
-    fieldName: "audio",
-    mimeType: "audio/m4a",
-  });
-  if (result.status < 200 || result.status >= 300) {
-    throw new HttpError(result.status, `extract failed (${result.status})`);
-  }
-}
-
-export function useExtractAudio(visitId: string, assessmentId: string) {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (uri: string) => extractFromAudio(assessmentId, uri),
-    // The drafts are generated server-side; pull them local, then refresh the assessment.
-    onSuccess: async () => {
-      await pullSync();
-      queryClient.invalidateQueries({ queryKey: ["assessment", visitId] });
-    },
+// Only the reviewer's own flags feed the returned banner; the deterministic quality-check
+// warnings that also sync down are recomputed live on-device instead.
+export function useReviewFlags(assessmentId: string | undefined, options?: { enabled?: boolean }) {
+  return useQuery({
+    queryKey: ["flags", assessmentId],
+    queryFn: async () =>
+      (await localFlags(assessmentId!)).filter((flag) => flag.ruleId.startsWith("review:")),
+    enabled: Boolean(assessmentId) && (options?.enabled ?? true),
   });
 }

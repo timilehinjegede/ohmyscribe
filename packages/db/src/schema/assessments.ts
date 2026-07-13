@@ -1,5 +1,6 @@
 import { index, jsonb, pgTable, timestamp, unique, uuid } from "drizzle-orm/pg-core";
 import { clientUpdatedAt, syncColumns } from "./columns.ts";
+import { reviewStatus } from "./enums.ts";
 import { visits } from "./visits.ts";
 
 export const assessments = pgTable(
@@ -12,6 +13,8 @@ export const assessments = pgTable(
       .references(() => visits.id),
     completedAt: timestamp("completed_at", { withTimezone: true, mode: "date" }),
     pdgmSnapshot: jsonb("pdgm_snapshot"),
+    // Null means draft/not yet filed, so no default.
+    reviewStatus: reviewStatus("review_status"),
   },
   (t) => [
     index("assessments_server_seq_idx").on(t.serverSeq),

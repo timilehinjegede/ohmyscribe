@@ -1,12 +1,14 @@
 import { useState } from "react";
 
 import { SyncView } from "@/components/sync-view";
+import { useRetryExtraction } from "@/data/extractions";
 import { useSyncDetail } from "@/data/sync-status";
 import { atLeast } from "@/lib/async";
 import { syncNow } from "@/sync";
 
 export default function SyncScreen() {
   const { data, isPending } = useSyncDetail();
+  const retryExtraction = useRetryExtraction();
   const [syncing, setSyncing] = useState(false);
 
   const onSync = async () => {
@@ -15,5 +17,13 @@ export default function SyncScreen() {
     setSyncing(false);
   };
 
-  return <SyncView data={data} isPending={isPending} syncing={syncing} onSync={onSync} />;
+  return (
+    <SyncView
+      data={data}
+      isPending={isPending}
+      syncing={syncing}
+      onSync={onSync}
+      onRetry={(assessmentId) => retryExtraction.mutate(assessmentId)}
+    />
+  );
 }

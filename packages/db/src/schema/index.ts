@@ -8,6 +8,7 @@ export * from "./assessment-answers.ts";
 export * from "./diagnosis-codings.ts";
 export * from "./diagnosis-suggestions.ts";
 export * from "./answer-suggestions.ts";
+export * from "./assessment-transcripts.ts";
 export * from "./quality-flags.ts";
 export * from "./audit-logs.ts";
 export * from "./raw-referrals.ts";

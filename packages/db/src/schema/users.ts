@@ -15,3 +15,6 @@ export const users = pgTable(
 
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
+
+// Fixed id of the migration-seeded reviewer since we didn't implement auth.
+export const DEFAULT_REVIEWER_ID = "00000000-0000-0000-0000-0000000000aa";

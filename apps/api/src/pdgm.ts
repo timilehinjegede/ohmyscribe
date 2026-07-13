@@ -1,5 +1,6 @@
 import type { Db } from "@ohmyscribe/db";
 import {
+  buildPdgmInput,
   computePdgm,
   type AdmissionSource,
   type PdgmResult,
@@ -20,11 +21,5 @@ export async function computeAssessmentPdgm(
   const coded = await getCodedDiagnoses(db, assessmentId);
   const assessment = await getAssessment(db, assessmentId);
   if (!coded || !assessment) return null;
-
-  const codings = coded.flatMap((diagnosis) => (diagnosis.coding ? [diagnosis.coding] : []));
-  const primaryIcd10 = codings.find((coding) => coding.isPrimary)?.icd10Code ?? null;
-  const secondaryIcd10s = codings.filter((coding) => !coding.isPrimary).map((c) => c.icd10Code);
-  const answers = Object.fromEntries(assessment.answers.map((a) => [a.itemCode, a.value]));
-
-  return computePdgm({ primaryIcd10, secondaryIcd10s, answers, timing, admissionSource });
+  return computePdgm(buildPdgmInput(coded, assessment.answers, timing, admissionSource));
 }

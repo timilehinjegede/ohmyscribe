@@ -18,7 +18,12 @@ import { BottomTabInset, Radius, Spacing } from "@/constants/theme";
 import type { SyncVisitGroup } from "@/db/sync-status";
 import { useTheme } from "@/hooks/use-theme";
 
-export type SyncData = { groups: SyncVisitGroup[]; pending: number; failed: number };
+export type SyncData = {
+  groups: SyncVisitGroup[];
+  pending: number;
+  failed: number;
+  recordings: { queued: number; failed: number };
+};
 
 type SyncState = "synced" | "pending" | "failed";
 
@@ -63,11 +68,13 @@ export function SyncView({
   isPending,
   syncing,
   onSync,
+  onRetry,
 }: {
   data: SyncData | undefined;
   isPending: boolean;
   syncing: boolean;
   onSync: () => void;
+  onRetry: (assessmentId: string) => void;
 }) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
@@ -121,14 +128,25 @@ export function SyncView({
               ) : null}
             </View>
           }
-          renderItem={({ item }) => <GroupRow group={item} chevron={theme.textSecondary} />}
+          renderItem={({ item }) => (
+            <GroupRow group={item} chevron={theme.textSecondary} onRetry={onRetry} />
+          )}
         />
       )}
     </ThemedView>
   );
 }
 
-function GroupRow({ group, chevron }: { group: SyncVisitGroup; chevron: string }) {
+function GroupRow({
+  group,
+  chevron,
+  onRetry,
+}: {
+  group: SyncVisitGroup;
+  chevron: string;
+  onRetry: (assessmentId: string) => void;
+}) {
+  const retryAssessmentId = group.recordingAssessmentId;
   return (
     <Link href={`/visits/${group.visitId}`} asChild>
       <Pressable style={({ pressed }) => pressed && styles.pressed}>
@@ -140,7 +158,28 @@ function GroupRow({ group, chevron }: { group: SyncVisitGroup; chevron: string }
               {group.pending > 0 ? (
                 <Badge tone="neutral" label={`${group.pending} pending`} />
               ) : null}
+              {group.recordingsFailed > 0 ? (
+                <Badge
+                  tone="danger"
+                  label={`${group.recordingsFailed} recording${plural(group.recordingsFailed)} failed`}
+                />
+              ) : null}
+              {group.recordingsQueued > 0 ? (
+                <Badge
+                  tone="accent"
+                  label={`${group.recordingsQueued} recording${plural(group.recordingsQueued)} queued`}
+                />
+              ) : null}
             </View>
+            {group.recordingsFailed > 0 && retryAssessmentId ? (
+              <Button
+                title="Retry recording"
+                variant="secondary"
+                size="compact"
+                onPress={() => onRetry(retryAssessmentId)}
+                style={styles.retryButton}
+              />
+            ) : null}
           </View>
           <HugeiconsIcon icon={ArrowRight01Icon} size={18} color={chevron} />
         </Card>
@@ -209,7 +248,12 @@ const styles = StyleSheet.create({
   },
   badges: {
     flexDirection: "row",
+    flexWrap: "wrap",
     gap: Spacing.one,
+  },
+  retryButton: {
+    alignSelf: "flex-start",
+    marginTop: Spacing.one,
   },
   pressed: {
     opacity: 0.6,

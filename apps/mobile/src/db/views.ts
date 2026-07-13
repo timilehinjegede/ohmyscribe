@@ -14,6 +14,8 @@ import type {
   DiagnosisRow,
   DiagnosisSuggestionRow,
   PatientRow,
+  QualityFlagRow,
+  TranscriptRow,
   VisitRow,
 } from "@/db/rows";
 import { localRow, localRows } from "@/db/sqlite";
@@ -80,9 +82,16 @@ export async function localVisit(id: string): Promise<VisitDetail | null> {
           answeredCount: answers.filter((row) => row.assessmentId === assessmentRow.id).length,
           codedCount: codings.filter((row) => row.assessmentId === assessmentRow.id).length,
           completedAt: assessmentRow.completedAt,
+          reviewStatus: assessmentRow.reviewStatus,
         }
       : null,
   };
+}
+
+// Unresolved flags for an assessment, as pulled from the server.
+export async function localFlags(assessmentId: string): Promise<QualityFlagRow[]> {
+  const flags = await localRows<QualityFlagRow>("quality_flags");
+  return flags.filter((row) => row.assessmentId === assessmentId && !row.resolved);
 }
 
 // Mirrors getAssessment.
@@ -90,14 +99,18 @@ export async function localAssessment(visitId: string): Promise<AssessmentDetail
   const assessments = await localRows<AssessmentRow>("assessments");
   const assessment = assessments.find((row) => row.visitId === visitId);
   if (!assessment) return null;
-  const [answers, suggestions] = await Promise.all([
+  const [answers, suggestions, transcriptRows] = await Promise.all([
     localRows<AnswerRow>("assessment_answers"),
     localRows<AnswerSuggestionRow>("answer_suggestions"),
+    localRows<TranscriptRow>("assessment_transcripts"),
   ]);
+  const transcriptRow = transcriptRows.find((row) => row.assessmentId === assessment.id) ?? null;
   return {
     id: assessment.id,
     visitId: assessment.visitId,
     completedAt: assessment.completedAt,
+    pdgmSnapshot: assessment.pdgmSnapshot,
+    transcript: transcriptRow && transcriptRow.text.trim() !== "" ? transcriptRow.text : null,
     answers: answers
       .filter((row) => row.assessmentId === assessment.id)
       .map((row) => ({ itemCode: row.itemCode, value: row.value })),
@@ -107,6 +120,8 @@ export async function localAssessment(visitId: string): Promise<AssessmentDetail
         itemCode: row.itemCode,
         value: row.suggestedValue as string,
         transcriptSnippet: row.transcriptSnippet,
+        snippetStart: row.snippetStart,
+        snippetEnd: row.snippetEnd,
         confidence: row.confidence,
       })),
   };
