@@ -1,7 +1,5 @@
 import { useRef } from "react";
 import { Modal, Pressable, ScrollView, StyleSheet, View, type TextLayoutEvent } from "react-native";
-import { Cancel01Icon } from "@hugeicons/core-free-icons";
-import { HugeiconsIcon } from "@hugeicons/react-native";
 import { resolveSnippetRange } from "@ohmyscribe/shared";
 
 import { Card } from "@/components/card";
@@ -61,14 +59,12 @@ export function TranscriptSheet({
       onRequestClose={onClose}
     >
       <ThemedView style={styles.sheet}>
-        <View style={styles.header}>
-          <ThemedText type="smallBold">Transcript</ThemedText>
-          <Pressable
-            onPress={onClose}
-            hitSlop={8}
-            style={[styles.closeButton, { backgroundColor: theme.backgroundElement }]}
-          >
-            <HugeiconsIcon icon={Cancel01Icon} size={16} color={theme.textSecondary} />
+        <View style={[styles.header, { borderBottomColor: theme.border }]}>
+          <ThemedText style={styles.headerTitle}>Transcript</ThemedText>
+          <Pressable onPress={onClose} hitSlop={8} style={styles.done}>
+            <ThemedText themeColor="accent" style={styles.doneLabel}>
+              Done
+            </ThemedText>
           </Pressable>
         </View>
         {transcript === null ? (
@@ -116,19 +112,27 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: Spacing.three,
-  },
-  closeButton: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
+    height: 56,
     alignItems: "center",
     justifyContent: "center",
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  headerTitle: {
+    fontSize: 17,
+    fontWeight: "600",
+  },
+  done: {
+    position: "absolute",
+    right: Spacing.three,
+  },
+  doneLabel: {
+    fontWeight: "600",
   },
   empty: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: Spacing.one,
     padding: Spacing.three,
   },
   content: {

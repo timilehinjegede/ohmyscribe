@@ -71,6 +71,26 @@ export function CodingStep({
 
   return (
     <View style={styles.group}>
+      {isComplete ? (
+        <>
+          <Pressable
+            onPress={() => setTranscriptOpen(true)}
+            hitSlop={8}
+            style={styles.transcriptLink}
+          >
+            <HugeiconsIcon icon={FileSearchIcon} size={16} color={theme.accent} />
+            <ThemedText type="linkPrimary">View visit transcript</ThemedText>
+          </Pressable>
+          <TranscriptSheet
+            visible={transcriptOpen}
+            transcript={transcript}
+            snippet={null}
+            snippetStart={null}
+            snippetEnd={null}
+            onClose={() => setTranscriptOpen(false)}
+          />
+        </>
+      ) : null}
       <Card style={styles.payment}>
         {isComplete ? <Badge label="Filed" tone="success" /> : null}
         <ThemedText type="small" themeColor="textSecondary">
@@ -163,26 +183,6 @@ export function CodingStep({
         <ThemedText type="small" themeColor="textSecondary">
           {fileHint(blockerCount, unacknowledgedCount)}
         </ThemedText>
-      ) : null}
-      {isComplete && transcript !== null ? (
-        <>
-          <Pressable
-            onPress={() => setTranscriptOpen(true)}
-            hitSlop={8}
-            style={styles.transcriptLink}
-          >
-            <HugeiconsIcon icon={FileSearchIcon} size={16} color={theme.accent} />
-            <ThemedText type="linkPrimary">View visit transcript</ThemedText>
-          </Pressable>
-          <TranscriptSheet
-            visible={transcriptOpen}
-            transcript={transcript}
-            snippet={null}
-            snippetStart={null}
-            snippetEnd={null}
-            onClose={() => setTranscriptOpen(false)}
-          />
-        </>
       ) : null}
     </View>
   );

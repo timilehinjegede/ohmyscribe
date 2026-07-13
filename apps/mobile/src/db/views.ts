@@ -110,7 +110,7 @@ export async function localAssessment(visitId: string): Promise<AssessmentDetail
     visitId: assessment.visitId,
     completedAt: assessment.completedAt,
     pdgmSnapshot: assessment.pdgmSnapshot,
-    transcript: transcriptRow?.text ?? null,
+    transcript: transcriptRow && transcriptRow.text.trim() !== "" ? transcriptRow.text : null,
     answers: answers
       .filter((row) => row.assessmentId === assessment.id)
       .map((row) => ({ itemCode: row.itemCode, value: row.value })),
