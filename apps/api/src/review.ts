@@ -129,13 +129,6 @@ export async function getReviewDetail(db: Db, assessmentId: string) {
 
 export type ReviewDetail = NonNullable<Awaited<ReturnType<typeof getReviewDetail>>>;
 
-export async function listReviewers(db: Db): Promise<{ id: string; name: string }[]> {
-  return db
-    .select({ id: users.id, name: users.name })
-    .from(users)
-    .where(and(eq(users.role, "reviewer"), isNull(users.deletedAt)));
-}
-
 export async function findReviewer(db: Db, userId: string): Promise<string | null> {
   const [reviewer] = await db
     .select({ id: users.id })

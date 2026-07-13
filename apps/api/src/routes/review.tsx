@@ -18,14 +18,11 @@ import {
   findReviewer,
   getReviewDetail,
   listReviewQueue,
-  listReviewers,
   returnAssessment,
   type ReturnFlag,
   type ReviewDetail,
   type ReviewQueueItem,
 } from "../review.ts";
-
-type Reviewer = { id: string; name: string };
 
 const formatDate = (date: Date | null) => (date ? date.toISOString().slice(0, 10) : "—");
 
@@ -96,21 +93,6 @@ function QueuePage({ queue }: { queue: ReviewQueueItem[] }) {
         </table>
       )}
     </Layout>
-  );
-}
-
-function ReviewerSelect({ reviewers }: { reviewers: Reviewer[] }) {
-  return (
-    <label>
-      Reviewer
-      <select name="userId">
-        {reviewers.map((reviewer) => (
-          <option value={reviewer.id} selected={reviewer.id === DEFAULT_REVIEWER_ID}>
-            {reviewer.name}
-          </option>
-        ))}
-      </select>
-    </label>
   );
 }
 
@@ -192,7 +174,7 @@ function PdgmBlock({ snapshot }: { snapshot: PdgmResult | null }) {
   );
 }
 
-function DetailPage({ detail, reviewers }: { detail: ReviewDetail; reviewers: Reviewer[] }) {
+function DetailPage({ detail }: { detail: ReviewDetail }) {
   const patientName = detail.visit.patient?.name ?? "Unknown patient";
   const filed = detail.completedAt !== null;
 
@@ -251,27 +233,27 @@ function DetailPage({ detail, reviewers }: { detail: ReviewDetail; reviewers: Re
           <div class="action">
             <label>
               Note to the nurse
-              <textarea name="message" rows={3}></textarea>
+<textarea name="message" rows={3}></textarea>
             </label>
-            <ReviewerSelect reviewers={reviewers} />
-            <button type="submit" class="return">
-              Return to nurse
-            </button>
+            <div class="buttons">
+              <button type="submit" class="return">
+                Return to nurse
+              </button>
+              <button
+                type="submit"
+                class="approve"
+                formaction={`/review/${detail.assessmentId}/approve`}
+              >
+                Approve
+              </button>
+            </div>
           </div>
         </form>
       ) : (
-        <AnswersTable detail={detail} flaggable={false} />
-      )}
-
-      {filed ? (
-        <form method="post" action={`/review/${detail.assessmentId}/approve`} class="action">
-          <ReviewerSelect reviewers={reviewers} />
-          <button type="submit" class="approve">
-            Approve
-          </button>
-        </form>
-      ) : (
-        <p class="muted">Returned to the nurse — actions unlock when the assessment is refiled.</p>
+        <>
+          <AnswersTable detail={detail} flaggable={false} />
+          <p class="muted">Returned to the nurse — actions unlock when the assessment is refiled.</p>
+        </>
       )}
     </Layout>
   );
@@ -388,8 +370,7 @@ review.get("/:assessmentId", assessmentParam, async (c) => {
       404,
     );
   }
-  const reviewers = await listReviewers(db);
-  return c.html(<DetailPage detail={detail} reviewers={reviewers} />);
+  return c.html(<DetailPage detail={detail} />);
 });
 
 review.post("/:assessmentId/approve", assessmentParam, async (c) => {
