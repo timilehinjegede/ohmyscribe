@@ -66,7 +66,13 @@ export function ReviewStep({
         </Pressable>
       ) : null}
       {suggestions.length === 0 ? (
-        extraction?.status === "queued" || extraction?.status === "uploading" ? (
+        extraction?.status === "uploading" ? (
+          <Card type="accentMuted">
+            <ThemedText type="small" style={{ color: theme.accent }}>
+              Transcribing your recording — AI drafts will appear shortly.
+            </ThemedText>
+          </Card>
+        ) : extraction?.status === "queued" ? (
           <Card type="accentMuted">
             <ThemedText type="small" style={{ color: theme.accent }}>
               Your recording is saved. AI drafts will appear when back online.
