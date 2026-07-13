@@ -60,14 +60,17 @@ export async function extractAnswers(
   // One transaction so a mid-replace failure can't wipe the old drafts and leave none behind.
   await db.transaction(async (tx) => {
     // Upsert-in-place (not delete+insert) so the update trigger bumps server_seq and the pull
-    // picks up the replaced text. Persisted even when no draft survives validation.
-    await tx
-      .insert(assessmentTranscripts)
-      .values({ assessmentId, text: transcript, updatedAt: new Date() })
-      .onConflictDoUpdate({
-        target: assessmentTranscripts.assessmentId,
-        set: { text: sql`excluded.text`, updatedAt: sql`excluded.updated_at` },
-      });
+    // picks up the replaced text. Persisted even when no draft survives validation; a blank
+    // transcription is not since it would clobber good text and render as an empty sheet.
+    if (transcript.trim() !== "") {
+      await tx
+        .insert(assessmentTranscripts)
+        .values({ assessmentId, text: transcript, updatedAt: new Date() })
+        .onConflictDoUpdate({
+          target: assessmentTranscripts.assessmentId,
+          set: { text: sql`excluded.text`, updatedAt: sql`excluded.updated_at` },
+        });
+    }
     await tx.delete(answerSuggestions).where(eq(answerSuggestions.assessmentId, assessmentId));
     if (drafts.length === 0) return;
     await tx.insert(answerSuggestions).values(
