@@ -1,5 +1,7 @@
-import { type ReactNode } from "react";
-import { StyleSheet, View } from "react-native";
+import { useState, type ReactNode } from "react";
+import { Pressable, StyleSheet, View } from "react-native";
+import { FileSearchIcon } from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react-native";
 import {
   getOasisItem,
   type AdmissionSource,
@@ -13,6 +15,7 @@ import { Badge } from "@/components/badge";
 import { Card } from "@/components/card";
 import { SegmentedControl } from "@/components/segmented-control";
 import { ThemedText } from "@/components/themed-text";
+import { TranscriptSheet } from "@/components/transcript-sheet";
 import { Spacing } from "@/constants/theme";
 import { useTheme } from "@/hooks/use-theme";
 
@@ -49,6 +52,7 @@ export function CodingStep({
   onTimingChange,
   onAdmissionChange,
   result,
+  transcript,
   blockerCount,
   unacknowledgedCount,
 }: {
@@ -58,10 +62,12 @@ export function CodingStep({
   onTimingChange: (timing: Timing) => void;
   onAdmissionChange: (admissionSource: AdmissionSource) => void;
   result: PdgmResult;
+  transcript: string | null;
   blockerCount: number;
   unacknowledgedCount: number;
 }) {
   const theme = useTheme();
+  const [transcriptOpen, setTranscriptOpen] = useState(false);
 
   return (
     <View style={styles.group}>
@@ -158,6 +164,26 @@ export function CodingStep({
           {fileHint(blockerCount, unacknowledgedCount)}
         </ThemedText>
       ) : null}
+      {isComplete && transcript !== null ? (
+        <>
+          <Pressable
+            onPress={() => setTranscriptOpen(true)}
+            hitSlop={8}
+            style={styles.transcriptLink}
+          >
+            <HugeiconsIcon icon={FileSearchIcon} size={16} color={theme.accent} />
+            <ThemedText type="linkPrimary">View visit transcript</ThemedText>
+          </Pressable>
+          <TranscriptSheet
+            visible={transcriptOpen}
+            transcript={transcript}
+            snippet={null}
+            snippetStart={null}
+            snippetEnd={null}
+            onClose={() => setTranscriptOpen(false)}
+          />
+        </>
+      ) : null}
     </View>
   );
 }
@@ -222,6 +248,11 @@ function Dimension({
 }
 
 const styles = StyleSheet.create({
+  transcriptLink: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.one,
+  },
   group: {
     gap: Spacing.two,
   },

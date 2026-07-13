@@ -234,6 +234,7 @@ export default function AssessmentWizard() {
                 onTimingChange={setTiming}
                 onAdmissionChange={setAdmission}
                 result={liveResult!} // non-null once assessment.data passed the guards above
+                transcript={assessment.data.transcript}
                 blockerCount={blockers.length}
                 unacknowledgedCount={unacknowledgedWarnings.length}
               />
