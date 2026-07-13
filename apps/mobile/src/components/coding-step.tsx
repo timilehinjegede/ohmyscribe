@@ -1,5 +1,5 @@
 import { type ReactNode } from "react";
-import { ActivityIndicator, Pressable, StyleSheet, View } from "react-native";
+import { StyleSheet, View } from "react-native";
 import {
   getOasisItem,
   type AdmissionSource,
@@ -8,7 +8,6 @@ import {
   type PdgmResult,
   type Timing,
 } from "@ohmyscribe/shared";
-import type { UseQueryResult } from "@tanstack/react-query";
 
 import { Badge } from "@/components/badge";
 import { Card } from "@/components/card";
@@ -33,41 +32,36 @@ const ADMISSION_LABEL: Record<AdmissionSource, string> = {
   institutional: "Institutional",
 };
 
+const fileHint = (blockerCount: number, unacknowledgedCount: number): string => {
+  const steps = [
+    blockerCount > 0 ? `resolve ${blockerCount} blocker${blockerCount === 1 ? "" : "s"}` : null,
+    unacknowledgedCount > 0
+      ? `acknowledge ${unacknowledgedCount} warning${unacknowledgedCount === 1 ? "" : "s"} on the Review step`
+      : null,
+  ].filter((step) => step !== null);
+  return `To file: ${steps.join(" and ")}.`;
+};
+
 export function CodingStep({
   isComplete,
   timing,
   admission,
   onTimingChange,
   onAdmissionChange,
-  pdgm,
+  result,
+  blockerCount,
+  unacknowledgedCount,
 }: {
   isComplete: boolean;
   timing: Timing;
   admission: AdmissionSource;
   onTimingChange: (timing: Timing) => void;
   onAdmissionChange: (admissionSource: AdmissionSource) => void;
-  pdgm: UseQueryResult<PdgmResult>;
+  result: PdgmResult;
+  blockerCount: number;
+  unacknowledgedCount: number;
 }) {
   const theme = useTheme();
-
-  if (pdgm.isPending) {
-    return (
-      <View style={styles.centered}>
-        <ActivityIndicator />
-      </View>
-    );
-  }
-  if (pdgm.isError || !pdgm.data) {
-    return (
-      <View style={styles.centered}>
-        <ThemedText themeColor="textSecondary">Could not compute the PDGM grouping.</ThemedText>
-        <Pressable onPress={() => pdgm.refetch()} hitSlop={8}>
-          <ThemedText type="linkPrimary">Retry</ThemedText>
-        </Pressable>
-      </View>
-    );
-  }
-  const result = pdgm.data;
 
   return (
     <View style={styles.group}>
@@ -79,9 +73,20 @@ export function CodingStep({
         <ThemedText type="subtitle" style={{ color: theme.accent }}>
           ${result.estimatedPayment.toLocaleString()}
         </ThemedText>
-        <ThemedText type="small" themeColor="textSecondary">
-          Illustrative · case-mix weight {result.caseMixWeight}
-        </ThemedText>
+        {result.weightApproximated ? (
+          <ThemedText type="small" themeColor="textSecondary">
+            Illustrative · case-mix weight {result.caseMixWeight}
+          </ThemedText>
+        ) : (
+          <>
+            <ThemedText type="small" themeColor="textSecondary">
+              CMS CY2025 base-rate estimate · weight {result.caseMixWeight}
+            </ThemedText>
+            <ThemedText type="small" themeColor="textSecondary">
+              Excludes wage index, LUPA & outliers
+            </ThemedText>
+          </>
+        )}
       </Card>
 
       {isComplete ? (
@@ -118,7 +123,14 @@ export function CodingStep({
         detail={
           result.clinicalGroupDriver ? `from ${result.clinicalGroupDriver}` : "no primary coded"
         }
-      />
+      >
+        {/* An uncoded primary gets the gentler hint below, not the return-to-provider warning. */}
+        {result.clinicalGroupDriver && !result.primaryAcceptable ? (
+          <ThemedText type="small" themeColor="danger">
+            Primary not valid for PDGM (return to provider)
+          </ThemedText>
+        ) : null}
+      </Dimension>
       <Dimension
         label="Functional level"
         value={FUNCTIONAL_LABEL[result.functional.level]}
@@ -139,6 +151,11 @@ export function CodingStep({
       {!isComplete && !result.clinicalGroupDriver ? (
         <ThemedText type="small" themeColor="textSecondary">
           Code a primary diagnosis to file, then Complete visit.
+        </ThemedText>
+      ) : null}
+      {!isComplete && (blockerCount > 0 || unacknowledgedCount > 0) ? (
+        <ThemedText type="small" themeColor="textSecondary">
+          {fileHint(blockerCount, unacknowledgedCount)}
         </ThemedText>
       ) : null}
     </View>
@@ -205,12 +222,6 @@ function Dimension({
 }
 
 const styles = StyleSheet.create({
-  centered: {
-    alignItems: "center",
-    justifyContent: "center",
-    gap: Spacing.two,
-    paddingVertical: Spacing.four,
-  },
   group: {
     gap: Spacing.two,
   },
